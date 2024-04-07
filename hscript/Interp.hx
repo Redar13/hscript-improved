@@ -482,8 +482,8 @@ class Interp {
 					error(EAlreadyExistingClass(name));
 				
 				inline function importVar(thing:String):String{
-					final extendClass:Class<Any> = variables.exists(thing) && thing != null ? cast variables.get(thing) : null;
-					return extendClass == null ? extend : Type.getClassName(extendClass);
+					final variable:Class<Any> = variables.exists(thing) && thing != null ? cast variables.get(thing) : null;
+					return variable == null ? thing : Type.getClassName(thing);
 				}
 				customClasses.set(name, new CustomClassHandler(this, name, fields, importVar(extend), [for (i in interfaces) importVar(i)]));
 			case EImport(c, n):
