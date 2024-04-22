@@ -25,6 +25,9 @@ class CustomClassHandler implements IHScriptCustomConstructor {
 		interp.errorHandler = ogInterp.errorHandler;
 
 		var cl = extend == null ? TemplateClass : Type.resolveClass('${extend}_HSX');
+		if(cl == null)
+			ogInterp.error(EInvalidClass(extend));
+
 		var _class = Type.createInstance(cl, args);
 
 		var __capturedLocals = ogInterp.duplicate(ogInterp.locals);
