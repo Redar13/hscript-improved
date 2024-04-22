@@ -442,6 +442,8 @@ class Interp {
 	}
 
 	public function resolve(id:String, doException:Bool = true):Dynamic {
+		if (id == null)
+			return null;
 		id = StringTools.trim(id);
 		var l = locals.get(id);
 		if (l != null)
@@ -480,10 +482,10 @@ class Interp {
 			case EClass(name, fields, extend, interfaces):
 				if (customClasses.exists(name))
 					error(EAlreadyExistingClass(name));
-				
-				inline function importVar(thing:String):String{
-					final variable:Class<Any> = variables.exists(thing) && thing != null ? cast variables.get(thing) : null;
-					return variable == null ? thing : Type.getClassName(thing);
+
+				inline function importVar(thing:String):String {
+					final variable:Class<Any> = cast resolve(thing, false);
+					return variable == null ? thing : Type.getClassName(variable);
 				}
 				customClasses.set(name, new CustomClassHandler(this, name, fields, importVar(extend), [for (i in interfaces) importVar(i)]));
 			case EImport(c, n):
