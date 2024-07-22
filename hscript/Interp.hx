@@ -210,6 +210,35 @@ class Interp {
 			variables.set(name, v);
 	}
 
+	// ENUM!!!!
+	public function importEnum(enm:Enum<Dynamic>, ?asName:String)
+	{
+		if (enm == null)
+			return;
+		var enumThingy = {};
+		for (c in enm.getConstructors()) {
+			try {
+				Reflect.setField(enumThingy, c, enm.createByName(c));
+			} catch(e) {
+				try {
+					Reflect.setField(enumThingy, c, Reflect.field(enm, c));
+				} catch(ex) {
+					throw e;
+				}
+			}
+		}
+		if (asName == null){
+			var splitName = Type.getEnumName(enm).split(".");
+			variables.set(splitName[splitName.length - 1], enumThingy);
+		}else{
+			variables.set(asName, enumThingy);
+		}
+			
+		for (i in Reflect.fields(enumThingy))
+		{
+			variables.set(i, Reflect.field(enumThingy, i));
+		}
+	}
 	function assign(e1:Expr, e2:Expr):Dynamic {
 		var v = expr(e2);
 		switch (Tools.expr(e1)) {
@@ -525,7 +554,7 @@ class Interp {
 					cl = Type.resolveClass('${realClassName}_HSC');
 
 				var en = Type.resolveEnum(realClassName);
-
+				
 				//trace(realClassName, cl, en, splitClassName);
 
 				// Allow for flixel.ui.FlxBar.FlxBarFillDirection;
@@ -552,20 +581,7 @@ class Interp {
 						error(EInvalidClass(oldClassName));
 				} else {
 					if (en != null) {
-						// ENUM!!!!
-						var enumThingy = {};
-						for (c in en.getConstructors()) {
-							try {
-								Reflect.setField(enumThingy, c, en.createByName(c));
-							} catch(e) {
-								try {
-									Reflect.setField(enumThingy, c, Reflect.field(en, c));
-								} catch(ex) {
-									throw e;
-								}
-							}
-						}
-						variables.set(toSetName, enumThingy);
+						importEnum(en, toSetName);
 					} else {
 						variables.set(toSetName, cl);
 					}
