@@ -854,16 +854,32 @@ class Parser {
 			while( true ) {
 				var t = token();
 				switch( t ) {
-					case TId("extends"):
-						var e = parseType();
-						switch(e) {
-							case CTPath(path, params):
-								if(extend != null) {
-									error(ECustom('Cannot extend a class twice.'), 0, 0);
+					case TId(id):
+						switch (id)
+						{
+							case "extends":
+								var e = parseType();
+								switch(e) {
+									case CTPath(path, params):
+										if(extend != null) {
+											error(ECustom('Cannot extend a class twice.'), 0, 0);
+										}
+										extend = path.join(".");
+									default:
+										error(ECustom('${Std.string(e)} is not a valid path.'), 0, 0);
 								}
-								extend = path.join(".");
-							default:
-								error(ECustom('${Std.string(e)} is not a valid path.'), 0, 0);
+							case "implements":
+								var e = parseType();
+								switch(e) {
+									case CTPath(path, params):
+										var strPath = path.join(".");
+										if(interfaces.contains(strPath)) {
+											error(ECustom('Cannot implement ${strPath} in class twice.'), 0, 0);
+										}
+										interfaces.push(strPath);
+									default:
+										error(ECustom('${Std.string(e)} is not a valid path.'), 0, 0);
+								}
 						}
 					default:
 						push(t);

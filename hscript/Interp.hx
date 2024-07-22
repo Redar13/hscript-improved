@@ -449,12 +449,17 @@ class Interp {
 		if (l != null)
 			return l.r;
 
-		var v = variables.get(id);
-		for(map in [variables, publicVariables, staticVariables, customClasses])
-			if (map.exists(id))
-				return map[id];
+		if (variables.exists(id))
+			return variables.get(id);
+		if (publicVariables.exists(id))
+			return publicVariables.get(id);
+		if (staticVariables.exists(id))
+			return staticVariables.get(id);
+		if (customClasses.exists(id))
+			return customClasses.get(id);
 
-		if (scriptObject != null) {
+		if (scriptObject != null)
+		{
 			// search in object
 			if (id == "this") {
 				return scriptObject;
@@ -463,14 +468,24 @@ class Interp {
 			} else {
 				if (__instanceFields.contains(id)) {
 					return Reflect.getProperty(scriptObject, id);
-				} else if (__instanceFields.contains('get_$id')) { // getter
-					return Reflect.getProperty(scriptObject, 'get_$id')();
 				}
+				// else if (__instanceFields.contains('get_$id')) { // getter // why?
+				// 	return Reflect.getProperty(scriptObject, 'get_$id')();
+				// } 
 			}
 		}
+		var cl:Class<Dynamic> = Type.resolveClass(id); // now you can do this thing: var a:haxe.io.Path = new haxe.io.Path();  yee
+		if (cl == null)
+			cl = Type.resolveClass('${id}_HSC');
+		if (cl != null)
+		{
+			variables.set(id, cl);
+			return cl;
+		}
+
 		if (doException)
 			error(EUnknownVariable(id));
-		return v;
+		return null;
 	}
 
 	public function expr(e:Expr):Dynamic {
@@ -486,7 +501,7 @@ class Interp {
 				inline function importVar(thing:String):String {
 					if (thing == null)
 						return null;
-					final variable:Class<Any> = variables.exists(thing) ? cast variables.get(thing) : null;
+					final variable:Class<Any> = customClasses.exists(thing) ? null : resolve(thing, false);
 					return variable == null ? thing : Type.getClassName(variable);
 				}
 				customClasses.set(name, new CustomClassHandler(this, name, fields, importVar(extend), [for (i in interfaces) importVar(i)]));
