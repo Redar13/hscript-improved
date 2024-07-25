@@ -498,9 +498,9 @@ class Interp {
 				if (__instanceFields.contains(id)) {
 					return Reflect.getProperty(scriptObject, id);
 				}
-				// else if (__instanceFields.contains('get_$id')) { // getter // why?
-				// 	return Reflect.getProperty(scriptObject, 'get_$id')();
-				// } 
+				else if (__instanceFields.contains('get_$id')) { // getter // why?
+					return Reflect.getProperty(scriptObject, 'get_$id')();
+				} 
 			}
 		}
 		var cl:Class<Dynamic> = Type.resolveClass(id); // now you can do this thing: var a:haxe.io.Path = new haxe.io.Path();  yee
@@ -1008,8 +1008,8 @@ class Interp {
 		cast(map, haxe.Constraints.IMap<Dynamic, Dynamic>).set(key, value);
 	}
 
-	public static var getRedirects:Map<String, Dynamic->String->Dynamic> = [];
-	public static var setRedirects:Map<String, Dynamic->String->Dynamic->Dynamic> = [];
+	public static var getRedirects:Map<String, (Dynamic, String)->Dynamic> = [];
+	public static var setRedirects:Map<String, (Dynamic, String, Dynamic)->Dynamic> = [];
 
 	function get(o:Dynamic, f:String):Dynamic {
 		if (o == null)
