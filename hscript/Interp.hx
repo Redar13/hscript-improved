@@ -495,12 +495,11 @@ class Interp {
 			} else if ((Type.typeof(scriptObject) == TObject) && Reflect.hasField(scriptObject, id)) {
 				return Reflect.field(scriptObject, id);
 			} else {
-				if (__instanceFields.contains(id)) {
+				if (__instanceFields.contains('get_$id')) { // getter
+					return Reflect.getProperty(scriptObject, 'get_$id')();
+				} else if (__instanceFields.contains(id)) {
 					return Reflect.getProperty(scriptObject, id);
 				}
-				else if (__instanceFields.contains('get_$id')) { // getter // why?
-					return Reflect.getProperty(scriptObject, 'get_$id')();
-				} 
 			}
 		}
 		var cl:Class<Dynamic> = Type.resolveClass(id); // now you can do this thing: var a:haxe.io.Path = new haxe.io.Path();  yee
