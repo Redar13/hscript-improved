@@ -144,12 +144,16 @@ class ClassExtendMacro {
 
 			//trace(getModuleName(cl));
 
+			var hasNew = false;
+
 			for(_field in [fields.copy(), superFields.copy()])
 			for(f in _field) {
 				if (f == null)
 					continue;
-				if (f.name == "new")
+				if (f.name == "new") {
+					hasNew = true;
 					continue;
+				}
 				if (f.name.startsWith(FUNC_PREFIX))
 					continue;
 				if (f.access.contains(ADynamic) || f.access.contains(AStatic) || f.access.contains(AExtern) || f.access.contains(AInline))
@@ -253,6 +257,13 @@ class ClassExtendMacro {
 				}
 			}
 
+			var totalFields = definedFields.length;
+
+			if(totalFields == 0 && !hasNew) {
+				//Sys.println(cl.pack.join(".") + "." + cl.name + ", " + totalFields);
+				return fields;
+			}
+
 			shadowClass.kind = TDClass({
 				pack: cl.pack.copy(),
 				name: cl.name
@@ -341,7 +352,7 @@ class ClassExtendMacro {
 						this.__interp.variables.set(name, val);
 						return val;
 					}
-					return super.hset(this, name);
+					return super.hset(name, val);
 				}
 			} else {
 				macro {
