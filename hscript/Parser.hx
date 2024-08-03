@@ -1184,33 +1184,33 @@ class Parser {
 				var params = null;
 				t = token();
 				switch( t ) {
-				case TOp(op):
-					if( op == "<" ) {
-						params = [];
-						while( true ) {
-							params.push(parseType());
-							t = token();
-							switch( t ) {
-							case TComma: continue;
-							case TOp(op):
-								if( op == ">" ) break;
-								if( op.charCodeAt(0) == ">".code ) {
-									#if hscriptPos
-									tokens.add({ t : TOp(op.substr(1)), min : tokenMax - op.length - 1, max : tokenMax });
-									#else
-									tokens.add(TOp(op.substr(1)));
-									#end
-									break;
+					case TOp(op):
+						if( op == "<" ) {
+							params = [];
+							while( true ) {
+								params.push(parseType());
+								t = token();
+								switch( t ) {
+								case TComma: continue;
+								case TOp(op):
+									if( op == ">" ) break;
+									if( op.charCodeAt(0) == ">".code ) {
+										#if hscriptPos
+										tokens.add({ t : TOp(op.substr(1)), min : tokenMax - op.length - 1, max :tokenMax });
+										#else
+										tokens.add(TOp(op.substr(1)));
+										#end
+										break;
+									}
+								default:
 								}
-							default:
+								unexpected(t);
+								break;
 							}
-							unexpected(t);
-							break;
-						}
-					} else
+						} else
+							push(t);
+					default:
 						push(t);
-				default:
-					push(t);
 				}
 				return parseTypeNext(CTPath(path, params));
 			case TPOpen:
