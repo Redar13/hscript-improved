@@ -1,5 +1,9 @@
 package hscript;
 
+#if hscript_test_reflect
+import hscript.UnsafeReflect as Reflect;
+#end
+
 using StringTools;
 
 class CustomClassHandler implements IHScriptCustomConstructor {

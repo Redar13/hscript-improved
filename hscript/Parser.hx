@@ -548,20 +548,20 @@ class Parser {
 	function mapCompr( tmp : String, e : Expr ) {
 		if( e == null ) return null;
 		var edef = switch( expr(e) ) {
-		case EFor(v, it, e2, ithv):
-			EFor(v, it, mapCompr(tmp, e2), ithv);
-		case EWhile(cond, e2):
-			EWhile(cond, mapCompr(tmp, e2));
-		case EDoWhile(cond, e2):
-			EDoWhile(cond, mapCompr(tmp, e2));
-		case EIf(cond, e1, e2) if( e2 == null ):
-			EIf(cond, mapCompr(tmp, e1), null);
-		case EBlock([e]):
-			EBlock([mapCompr(tmp, e)]);
-		case EParent(e2):
-			EParent(mapCompr(tmp, e2));
-		default:
-			ECall( mk(EField(mk(EIdent(tmp), pmin(e), pmax(e)), "push"), pmin(e), pmax(e)), [e]);
+			case EFor(v, it, e2, ithv):
+				EFor(v, it, mapCompr(tmp, e2), ithv);
+			case EWhile(cond, e2):
+				EWhile(cond, mapCompr(tmp, e2));
+			case EDoWhile(cond, e2):
+				EDoWhile(cond, mapCompr(tmp, e2));
+			case EIf(cond, e1, e2) if( e2 == null ):
+				EIf(cond, mapCompr(tmp, e1), null);
+			case EBlock([e]):
+				EBlock([mapCompr(tmp, e)]);
+			case EParent(e2):
+				EParent(mapCompr(tmp, e2));
+			default:
+				ECall( mk(EField(mk(EIdent(tmp), pmin(e), pmax(e)), "push"), pmin(e), pmax(e)), [e]);
 		}
 		return mk(edef, pmin(e), pmax(e));
 	}
@@ -936,6 +936,7 @@ class Parser {
 			case "return":
 				var tk = token();
 				push(tk);
+				// TODO: Fix bug with function return
 				var e = if( tk == TSemicolon ) null else parseExpr();
 				mk(EReturn(e),p1,if( e == null ) tokenMax else pmax(e));
 			case "new":
@@ -2022,6 +2023,7 @@ class Parser {
 			// TODO: Fix ending in with #end in the file
 			if( tk == TEof )
 				error(EInvalidPreprocessor("Unclosed"), pos, pos);
+			
 			if( preprocStack[spos] != obj ) {
 				push(tk);
 				break;

@@ -65,6 +65,7 @@ class ClassExtendMacro {
 			if(cl.module.contains("_")) return fields; // Weird issue, sorry
 
 			var superFields = [];
+			/*
 			if(cl.superClass != null) {
 				var _superFields = cl.superClass.t.get().fields.get();
 				_superFields = []; // Comment to enable super support, (broken)
@@ -130,11 +131,12 @@ class ClassExtendMacro {
 						}
 						superFields.push(nfield);
 					} catch(e) {
-
+						// trace(e);
 					}
 				}
 				//superFields = [];
 			}
+			*/
 
 			var shadowClass = macro class {
 

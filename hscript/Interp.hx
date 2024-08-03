@@ -34,6 +34,9 @@ import haxe.display.Protocol.InitializeResult;
 import haxe.PosInfos;
 import hscript.Expr;
 import haxe.Constraints.IMap;
+#if hscript_test_reflect
+import hscript.UnsafeReflect as Reflect;
+#end
 
 using StringTools;
 

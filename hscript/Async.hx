@@ -22,6 +22,10 @@
 package hscript;
 import hscript.Expr;
 
+#if hscript_test_reflect
+import hscript.UnsafeReflect as Reflect;
+#end
+
 
 enum VarMode {
 	Defined;
