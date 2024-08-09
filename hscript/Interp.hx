@@ -34,6 +34,7 @@ import haxe.display.Protocol.InitializeResult;
 import haxe.PosInfos;
 import hscript.Expr;
 import haxe.Constraints.IMap;
+import hscript.macros.ClassTools;
 #if hscript_test_reflect
 import hscript.UnsafeReflect as Reflect;
 #end
@@ -536,6 +537,73 @@ class Interp {
 					return variable == null ? thing : Type.getClassName(variable);
 				}
 				customClasses.set(name, new CustomClassHandler(this, name, fields, importVar(extend), [for (i in interfaces) importVar(i)]));
+			case EImportStar(pkg):
+				if (!importEnabled)
+					return null;
+				// trace(pkg);
+
+				// var p = pkg.split(".");
+				// if (p.length > 1)
+				// 	p[p.length - 1] = "_" + p[p.length - 1];
+				// var altPkg = p.join(".");
+				// trace(altPkg);
+
+				/*
+				var c = Type.resolveClass(pkg);
+				// if (c == null) Type.resolveClass(pkg + "_HSC");
+				if (c == null) c = Type.resolveClass(altPkg);
+				if (c == null) Type.resolveClass(altPkg + "_HSC");
+				*/
+				/*
+				if( c != null )
+				{
+					var fields = Reflect.fields(c);
+					trace(Reflect.fields(c));
+					trace(Type.getClassFields(c));
+					for( field in fields )
+					{
+						var f = Reflect.getProperty(c,field);
+						if(f != null)
+							variables.set(field,f);
+					}
+				}
+				else
+				*/
+				{
+					var importList:Array<String> = [];
+					for( i in hscript.macros.ClassTools.allClassesAvailable )
+					{
+						// if(i.length Б pkg.length)
+						// 	continue;
+						if(
+							!(StringTools.startsWith(i, pkg) && i.substr(pkg.length + 1).indexOf(".") == -1)
+							// && !(StringTools.startsWith(i, altPkg) && i.substr(altPkg.length + 1).indexOf(".") == -1)
+						)
+							continue;
+						if (!StringTools.endsWith(i, "_HSX"))
+							importList.push(i);
+					}
+					for (i in importList)
+						if (StringTools.endsWith(i, "_HSC") && importList.contains(i.substr(0, i.length - 4)))
+							importList.remove(i); // remove duplicate
+					// trace(importList);
+					for (i in importList)
+						expr(
+							#if hscriptPos
+							{
+								e: EImport(i),
+								pmin: curExpr.pmin,
+								pmax: curExpr.pmax,
+								origin: curExpr.origin,
+								line: curExpr.line,
+							}
+							#else
+							EImport(i)
+							#end
+						);
+				}
+				return null;
+
 			case EImport(c, n):
 				if (!importEnabled)
 					return null;

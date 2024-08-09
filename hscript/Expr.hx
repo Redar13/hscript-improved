@@ -72,6 +72,7 @@ enum Expr {
 	ECheckType( e : Expr, t : CType );
 
 	EImport( c : String, ?asname:String );
+	EImportStar( c : String );
 	EClass( name:String, fields:Array<Expr>, ?extend:String, interfaces:Array<String> );
 }
 

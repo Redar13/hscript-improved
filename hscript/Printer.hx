@@ -48,56 +48,56 @@ class Printer {
 
 	function type( t : CType ) {
 		switch( t ) {
-		case CTOpt(t):
-			add('?');
-			type(t);
-		case CTPath(path, params):
-			add(path.join("."));
-			if( params != null ) {
-				add("<");
+			case CTOpt(t):
+				add('?');
+				type(t);
+			case CTPath(path, params):
+				add(path.join("."));
+				if( params != null ) {
+					add("<");
+					var first = true;
+					for( p in params ) {
+						if( first ) first = false else add(", ");
+						type(p);
+					}
+					add(">");
+				}
+			case CTNamed(name, t):
+				add(name);
+				add(':');
+				type(t);
+			case CTFun(args, ret) if (Lambda.exists(args, function (a) return a.match(CTNamed(_, _)))):
+				add('(');
+				for (a in args)
+					switch a {
+						case CTNamed(_, _): type(a);
+						default: type(CTNamed('_', a));
+					}
+				add(')->');
+				type(ret);
+			case CTFun(args, ret):
+				if( args.length == 0 )
+					add("Void -> ");
+				else {
+					for( a in args ) {
+						type(a);
+						add(" -> ");
+					}
+				}
+				type(ret);
+			case CTAnon(fields):
+				add("{");
 				var first = true;
-				for( p in params ) {
-					if( first ) first = false else add(", ");
-					type(p);
+				for( f in fields ) {
+					if( first ) { first = false; add(" "); } else add(", ");
+					add(f.name + " : ");
+					type(f.t);
 				}
-				add(">");
-			}
-		case CTNamed(name, t):
-			add(name);
-			add(':');
-			type(t);
-		case CTFun(args, ret) if (Lambda.exists(args, function (a) return a.match(CTNamed(_, _)))):
-			add('(');
-			for (a in args)
-				switch a {
-					case CTNamed(_, _): type(a);
-					default: type(CTNamed('_', a));
-				}
-			add(')->');
-			type(ret);
-		case CTFun(args, ret):
-			if( args.length == 0 )
-				add("Void -> ");
-			else {
-				for( a in args ) {
-					type(a);
-					add(" -> ");
-				}
-			}
-			type(ret);
-		case CTAnon(fields):
-			add("{");
-			var first = true;
-			for( f in fields ) {
-				if( first ) { first = false; add(" "); } else add(", ");
-				add(f.name + " : ");
-				type(f.t);
-			}
-			add(first ? "}" : " }");
-		case CTParent(t):
-			add("(");
-			type(t);
-			add(")");
+				add(first ? "}" : " }");
+			case CTParent(t):
+				add("(");
+				type(t);
+				add(")");
 		}
 	}
 
@@ -114,236 +114,238 @@ class Printer {
 			return;
 		}
 		switch( #if hscriptPos e.e #else e #end ) {
-		case EImport(c, n):
-			add("import " + c);
-			if(n != null)
-				add(' as $n');
-		case EClass(name, fields, extend, interfaces):
-			add('class $name');
-			if (extend != null)
-				add(' extends $extend');
-			for(_interface in interfaces) {
-				add(' implements $_interface');
-			}
-			add(' {\n');
-			tabs += "\t";
-			//for(field in fields) {
-			//	expr(field);
-			//}
+			case EImportStar(c):
+				add("import " + c + "*");
+			case EImport(c, n):
+				add("import " + c);
+				if(n != null)
+					add(' as $n');
+			case EClass(name, fields, extend, interfaces):
+				add('class $name');
+				if (extend != null)
+					add(' extends $extend');
+				for(_interface in interfaces) {
+					add(' implements $_interface');
+				}
+				add(' {\n');
+				tabs += "\t";
+				//for(field in fields) {
+				//	expr(field);
+				//}
 
-			tabs = tabs.substr(1);
-			add("}");
-		case EConst(c):
-			switch( c ) {
-			case CInt(i): add(i);
-			case CFloat(f): add(f);
-			case CString(s): add('"'); add(s.split('"').join('\\"').split("\n").join("\\n").split("\r").join("\\r").split("\t").join("\\t")); add('"');
-			}
-		case EIdent(v):
-			add(v);
-		case EVar(n, t, e): // TODO: static, public, override
-			add("var " + n);
-			addType(t);
-			if( e != null ) {
-				add(" = ");
-				expr(e);
-			}
-		case EParent(e):
-			add("("); expr(e); add(")");
-		case EBlock(el):
-			if( el.length == 0 ) {
-				add("{}");
-			} else {
-				tabs += "\t";
-				add("{\n");
-				for( e in el ) {
-					add(tabs);
+				tabs = tabs.substr(1);
+				add("}");
+			case EConst(c):
+				switch( c ) {
+				case CInt(i): add(i);
+				case CFloat(f): add(f);
+				case CString(s): add('"'); add(s.split('"').join('\\"').split("\n").join("\\n").split("\r").join("\\r").split("\t").join("\\t")); add('"');
+				}
+			case EIdent(v):
+				add(v);
+			case EVar(n, t, e): // TODO: static, public, override
+				add("var " + n);
+				addType(t);
+				if( e != null ) {
+					add(" = ");
 					expr(e);
-					add(";\n");
 				}
-				tabs = tabs.substr(1);
-				add("}");
-			}
-		case EField(e, f, s):
-			expr(e);
-			add((s == true ? "?." : ".") + f);
-		case EBinop(op, e1, e2):
-			expr(e1);
-			add(" " + op + " ");
-			expr(e2);
-		case EUnop(op, pre, e):
-			if( pre ) {
-				add(op);
+			case EParent(e):
+				add("("); expr(e); add(")");
+			case EBlock(el):
+				if( el.length == 0 ) {
+					add("{}");
+				} else {
+					tabs += "\t";
+					add("{\n");
+					for( e in el ) {
+						add(tabs);
+						expr(e);
+						add(";\n");
+					}
+					tabs = tabs.substr(1);
+					add("}");
+				}
+			case EField(e, f, s):
 				expr(e);
-			} else {
-				expr(e);
-				add(op);
-			}
-		case ECall(e, args):
-			if( e == null )
-				expr(e);
-			else switch( #if hscriptPos e.e #else e #end ) {
-			case EField(_), EIdent(_), EConst(_):
-				expr(e);
-			default:
-				add("(");
-				expr(e);
-				add(")");
-			}
-			add("(");
-			var first = true;
-			for( a in args ) {
-				if( first ) first = false else add(", ");
-				expr(a);
-			}
-			add(")");
-		case EIf(cond,e1,e2):
-			add("if( ");
-			expr(cond);
-			add(" ) ");
-			expr(e1);
-			if( e2 != null ) {
-				add(" else ");
+				add((s == true ? "?." : ".") + f);
+			case EBinop(op, e1, e2):
+				expr(e1);
+				add(" " + op + " ");
 				expr(e2);
-			}
-		case EWhile(cond,e):
-			add("while( ");
-			expr(cond);
-			add(" ) ");
-			expr(e);
-		case EDoWhile(cond,e):
-			add("do ");
-			expr(e);
-			add(" while ( ");
-			expr(cond);
-			add(" )");
-		case EFor(v, it, e, ithv):
-			if(ithv != null)
-				add("for( "+ithv+" => "+v+" in ");
-			else
-				add("for( "+v+" in ");
-			expr(it);
-			add(" ) ");
-			expr(e);
-		case EBreak:
-			add("break");
-		case EContinue:
-			add("continue");
-		case EFunction(params, e, name, ret): // TODO: static, public, override
-			add("function");
-			if( name != null )
-				add(" " + name);
-			add("(");
-			var first = true;
-			for( a in params ) {
-				if( first ) first = false else add(", ");
-				if( a.opt ) add("?");
-				add(a.name);
-				addType(a.t);
-			}
-			add(")");
-			addType(ret);
-			add(" ");
-			expr(e);
-		case EReturn(e):
-			add("return");
-			if( e != null ) {
-				add(" ");
-				expr(e);
-			}
-		case EArray(e,index):
-			expr(e);
-			add("[");
-			expr(index);
-			add("]");
-		case EArrayDecl(el, _):
-			add("[");
-			var first = true;
-			for( e in el ) {
-				if( first ) first = false else add(", ");
-				expr(e);
-			}
-			add("]");
-		case ENew(cl, args):
-			add("new " + cl + "(");
-			var first = true;
-			for( e in args ) {
-				if( first ) first = false else add(", ");
-				expr(e);
-			}
-			add(")");
-		case EThrow(e):
-			add("throw ");
-			expr(e);
-		case ETry(e, v, t, ecatch):
-			add("try ");
-			expr(e);
-			add(" catch( " + v);
-			addType(t);
-			add(") ");
-			expr(ecatch);
-		case EObject(fl):
-			if( fl.length == 0 ) {
-				add("{}");
-			} else {
-				tabs += "\t";
-				add("{\n");
-				for( f in fl ) {
-					add(tabs);
-					add(f.name+" : ");
-					expr(f.e);
-					add(",\n");
+			case EUnop(op, pre, e):
+				if( pre ) {
+					add(op);
+					expr(e);
+				} else {
+					expr(e);
+					add(op);
 				}
-				tabs = tabs.substr(1);
-				add("}");
-			}
-		case ETernary(c,e1,e2):
-			expr(c);
-			add(" ? ");
-			expr(e1);
-			add(" : ");
-			expr(e2);
-		case ESwitch(e, cases, def):
-			add("switch( ");
-			expr(e);
-			add(") {");
-			for( c in cases ) {
-				add("case ");
-				var first = true;
-				for( v in c.values ) {
-					if( first ) first = false else add(", ");
-					expr(v);
+			case ECall(e, args):
+				if( e == null )
+					expr(e);
+				else switch( #if hscriptPos e.e #else e #end ) {
+				case EField(_), EIdent(_), EConst(_):
+					expr(e);
+				default:
+					add("(");
+					expr(e);
+					add(")");
 				}
-				add(": ");
-				expr(c.expr);
-				add(";\n");
-			}
-			if( def != null ) {
-				add("default: ");
-				expr(def);
-				add(";\n");
-			}
-			add("}");
-		case EMeta(name, args, e):
-			add("@");
-			add(name);
-			if( args != null && args.length > 0 ) {
 				add("(");
 				var first = true;
 				for( a in args ) {
 					if( first ) first = false else add(", ");
+					expr(a);
+				}
+				add(")");
+			case EIf(cond,e1,e2):
+				add("if( ");
+				expr(cond);
+				add(" ) ");
+				expr(e1);
+				if( e2 != null ) {
+					add(" else ");
+					expr(e2);
+				}
+			case EWhile(cond,e):
+				add("while( ");
+				expr(cond);
+				add(" ) ");
+				expr(e);
+			case EDoWhile(cond,e):
+				add("do ");
+				expr(e);
+				add(" while ( ");
+				expr(cond);
+				add(" )");
+			case EFor(v, it, e, ithv):
+				if(ithv != null)
+					add("for( "+ithv+" => "+v+" in ");
+				else
+					add("for( "+v+" in ");
+				expr(it);
+				add(" ) ");
+				expr(e);
+			case EBreak:
+				add("break");
+			case EContinue:
+				add("continue");
+			case EFunction(params, e, name, ret): // TODO: static, public, override
+				add("function");
+				if( name != null )
+					add(" " + name);
+				add("(");
+				var first = true;
+				for( a in params ) {
+					if( first ) first = false else add(", ");
+					if( a.opt ) add("?");
+					add(a.name);
+					addType(a.t);
+				}
+				add(")");
+				addType(ret);
+				add(" ");
+				expr(e);
+			case EReturn(e):
+				add("return");
+				if( e != null ) {
+					add(" ");
+					expr(e);
+				}
+			case EArray(e,index):
+				expr(e);
+				add("[");
+				expr(index);
+				add("]");
+			case EArrayDecl(el, _):
+				add("[");
+				var first = true;
+				for( e in el ) {
+					if( first ) first = false else add(", ");
+					expr(e);
+				}
+				add("]");
+			case ENew(cl, args):
+				add("new " + cl + "(");
+				var first = true;
+				for( e in args ) {
+					if( first ) first = false else add(", ");
 					expr(e);
 				}
 				add(")");
-			}
-			add(" ");
-			expr(e);
-		case ECheckType(e, t):
-			add("(");
-			expr(e);
-			add(" : ");
-			addType(t);
-			add(")");
+			case EThrow(e):
+				add("throw ");
+				expr(e);
+			case ETry(e, v, t, ecatch):
+				add("try ");
+				expr(e);
+				add(" catch( " + v);
+				addType(t);
+				add(") ");
+				expr(ecatch);
+			case EObject(fl):
+				if( fl.length == 0 ) {
+					add("{}");
+				} else {
+					tabs += "\t";
+					add("{\n");
+					for( f in fl ) {
+						add(tabs);
+						add(f.name+" : ");
+						expr(f.e);
+						add(",\n");
+					}
+					tabs = tabs.substr(1);
+					add("}");
+				}
+			case ETernary(c,e1,e2):
+				expr(c);
+				add(" ? ");
+				expr(e1);
+				add(" : ");
+				expr(e2);
+			case ESwitch(e, cases, def):
+				add("switch( ");
+				expr(e);
+				add(") {");
+				for( c in cases ) {
+					add("case ");
+					var first = true;
+					for( v in c.values ) {
+						if( first ) first = false else add(", ");
+						expr(v);
+					}
+					add(": ");
+					expr(c.expr);
+					add(";\n");
+				}
+				if( def != null ) {
+					add("default: ");
+					expr(def);
+					add(";\n");
+				}
+				add("}");
+			case EMeta(name, args, e):
+				add("@");
+				add(name);
+				if( args != null && args.length > 0 ) {
+					add("(");
+					var first = true;
+					for( a in args ) {
+						if( first ) first = false else add(", ");
+						expr(e);
+					}
+					add(")");
+				}
+				add(" ");
+				expr(e);
+			case ECheckType(e, t):
+				add("(");
+				expr(e);
+				add(" : ");
+				addType(t);
+				add(")");
 		}
 	}
 

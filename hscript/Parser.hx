@@ -790,7 +790,7 @@ class Parser {
 										token();
 										ensure(TSemicolon);
 										push(TSemicolon);
-										mk(EImport(s), p1);
+										mk(StringTools.endsWith(s, "*") ? EImportStar(s.substr(0, s.length - 1)) : EImport(s), p1);
 									default:
 										unexpected(tok);
 										null;
@@ -803,6 +803,7 @@ class Parser {
 						var path = [id];
 						var asname:String = null;
 						var t = null;
+						var star:Bool = false;
 						while( true ) {
 							t = token();
 							if( t != TDot ) {
@@ -824,6 +825,11 @@ class Parser {
 							switch( t ) {
 								case TId(id):
 									path.push(id);
+								case TOp(id):
+									if (star)
+										unexpected(t);
+									if (id == "*")
+										star = true;
 								default:
 									unexpected(t);
 							}
@@ -831,7 +837,7 @@ class Parser {
 						ensure(TSemicolon);
 						push(TSemicolon);
 						var p = path.join(".");
-						mk(EImport(p, asname),p1);
+						mk(star ? EImportStar(p) : EImport(p, asname), p1);
 					default:
 						unexpected(tk);
 						null;
