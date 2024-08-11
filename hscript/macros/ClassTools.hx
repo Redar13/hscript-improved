@@ -19,13 +19,9 @@ class ClassTools
 				switch t 
 				{
 					case TEnum(_.get() => c, _):
-						var pathNames: Array<String> = c.pack.copy();
-						pathNames.push(c.name);
-						names.push(Context.makeExpr(pathNames.join("."), c.pos));
+						names.push(Context.makeExpr('${c.pack.join(".")}.${c.name}', c.pos));
 					case TInst(_.get() => c, _):
-						var pathNames: Array<String> = c.pack.copy();
-						pathNames.push(c.name);
-						names.push(Context.makeExpr(pathNames.join("."), c.pos));
+						names.push(Context.makeExpr('${c.pack.join(".")}.${c.name}', c.pos));
 					default:
 				}
 
@@ -36,20 +32,6 @@ class ClassTools
 	}
 
 	#if !macro
-	public static final allClassesAvailable:List<String> = {
-		var r:Array<String> = build().classes;
-		var map = new List<String>();
-
-		for (i in r) 
-		{
-			if (i.indexOf('_Impl_') == -1) // Check non private class
-			{
-				if (!(Type.resolveClass(i) == null && Type.resolveEnum(i) == null)) map.push(i);
-			}
-		}
-
-		// trace(map);
-		map;
-	}
+	public static final allClassesAvailable:Array<String> = build().classes;
 	#end
 }
