@@ -32,6 +32,9 @@ class ClassTools
 	}
 
 	#if !macro
-	public static final allClassesAvailable:Array<String> = build().classes;
+	public static var allClassesAvailable(get, never):Array<String>;
+	static function get_allClassesAvailable() {
+		return build().classes;
+	}
 	#end
 }
