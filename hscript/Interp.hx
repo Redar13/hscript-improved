@@ -538,6 +538,7 @@ class Interp {
 				}
 				customClasses.set(name, new CustomClassHandler(this, name, fields, importVar(extend), [for (i in interfaces) importVar(i)]));
 			case EImportStar(pkg):
+				#if !macro
 				if (!importEnabled)
 					return null;
 				// trace(pkg);
@@ -602,6 +603,7 @@ class Interp {
 							#end
 						);
 				}
+				#end
 				return null;
 
 			case EImport(c, n):

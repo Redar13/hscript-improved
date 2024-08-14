@@ -19,9 +19,11 @@ class ClassTools
 				switch t 
 				{
 					case TEnum(_.get() => c, _):
-						names.push(Context.makeExpr('${c.pack.join(".")}.${c.name}', c.pos));
+						if (c.name.indexOf("_Impl_") == -1)
+							names.push(Context.makeExpr('${c.pack.join(".")}.${c.name}', c.pos));
 					case TInst(_.get() => c, _):
-						names.push(Context.makeExpr('${c.pack.join(".")}.${c.name}', c.pos));
+						if (c.name.indexOf("_Impl_") == -1)
+							names.push(Context.makeExpr('${c.pack.join(".")}.${c.name}', c.pos));
 					default:
 				}
 
@@ -31,10 +33,6 @@ class ClassTools
 		return macro cast haxe.rtti.Meta.getType($p{thisName.split('.')});
 	}
 
-	#if !macro
-	public static var allClassesAvailable(get, never):Array<String>;
-	static function get_allClassesAvailable() {
-		return build().classes;
-	}
-	#end
+	public static final allClassesAvailable:Array<String> = #if macro [] #else build().classes #end;
+
 }
