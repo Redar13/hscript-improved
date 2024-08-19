@@ -1166,7 +1166,17 @@ class Parser {
 			else
 				ret = parseType();
 		}
-		return { args : args, ret : ret, body : parseExpr() };
+		final expr = parseExpr();
+		switch (expr.e)
+		{
+			case EBlock(exprBlock): // Fix function without return
+				if (!exprBlock[exprBlock.length - 1].e.match(EReturn(_)))
+				{
+					exprBlock.push(mk(EReturn(null)));
+				}
+			case _:
+		}
+		return { args : args, ret : ret, body : expr };
 	}
 
 	function parsePath() {
