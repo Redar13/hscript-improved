@@ -55,6 +55,7 @@ class Interp {
 	}
 	public var errorHandler:Error->Void;
 	public var importFailedCallback:Array<String>->Bool;
+	public var onMetadata:String->Array<Expr>->Expr->Dynamic;
 	#if haxe3
 	public var customClasses:Map<String, Dynamic>;
 	public var variables:Map<String, Dynamic>;
@@ -117,7 +118,7 @@ class Interp {
 		publicVariables = new Hash();
 		staticVariables = new Hash();
 		#end
-
+		
 		variables.set("null", null);
 		variables.set("true", true);
 		variables.set("false", false);
@@ -765,10 +766,13 @@ class Interp {
 						capturedLocals.set(k, e);
 
 				var me = this;
-				var hasOpt = false, minParams = 0;
+				// var hasOpt = false;
+				var minParams = 0;
 				for (p in params)
 					if (p.opt)
-						hasOpt = true;
+					{
+						// hasOpt = true;
+					}
 					else
 						minParams++;
 				var f = function(args:Array<Dynamic>) {
@@ -968,9 +972,13 @@ class Interp {
 				if (!match)
 					val = def == null ? null : expr(def);
 				return val;
-			case EMeta(a, b, e):
+			case EMeta(name, args, e):
+				if (onMetadata != null)
+				{
+					return onMetadata(name, args, e);
+				}
 				var oldAccessor = isBypassAccessor;
-				if(a == ":bypassAccessor") {
+				if(name == ":bypassAccessor") {
 					isBypassAccessor = true;
 				}
 				var val = expr(e);
