@@ -26,9 +26,10 @@ class Utils {
 	}
 
 	public static function setupMetas(shadowClass:TypeDefinition, imports) {
-		shadowClass.meta = [];
-		shadowClass.meta.push({name: ":dox", params: [macro hide], pos: Context.currentPos()});
-		shadowClass.meta.push({name: ":noCompletion", params: [], pos: Context.currentPos()});
+		shadowClass.meta = [
+							{name: ":dox", params: [macro hide], pos: Context.currentPos()},
+							{name: ":noCompletion", params: [], pos: Context.currentPos()}
+						];
 		var module = Context.getModule(Context.getLocalModule());
 		for(t in module) {
 			switch(t) {

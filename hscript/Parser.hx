@@ -929,10 +929,12 @@ class Parser {
 
 				var fields = [];
 				ensure(TBrOpen);
-				while( !maybe(TBrClose) ) {
-					if(token() == TSemicolon) continue;
-					var a = parseExpr();
-					fields.push(a);
+				while( true ) {
+					parseFullExpr(fields);
+					tk = token();
+					if( tk == TBrClose || (resumeErrors && tk == TEof) )
+						break;
+					push(tk);
 				}
 
 				var tk = token();
@@ -987,7 +989,7 @@ class Parser {
 					var tk = token();
 					switch( tk ) {
 						case TId("case"):
-							var c = { values : [], expr : null };
+							var c:SwitchCase = { values : [], expr : null };
 							cases.push(c);
 							disableOrOp = true;
 							while( true ) {
@@ -1634,7 +1636,7 @@ class Parser {
 		return b.toString();
 	}
 
-	function token(?infos : Null<haxe.PosInfos>) {
+	function token() {
 		//function ttrace(v:Dynamic, ?infos : Null<haxe.PosInfos>) {
 		//	Sys.print(infos.fileName+":"+infos.lineNumber+": " + Std.string(v));
 		//	Sys.print("\r\n");
@@ -1645,6 +1647,7 @@ class Parser {
 		if( t != null ) {
 			tokenMin = t.min;
 			tokenMax = t.max;
+			//trace(t, infos);
 			//ttrace(t.t, infos);
 			return t.t;
 		}
@@ -2039,7 +2042,7 @@ class Parser {
 			// TODO: Fix ending in with #end in the file
 			if( tk == TEof )
 				error(EInvalidPreprocessor("Unclosed"), pos, pos);
-			
+
 			if( preprocStack[spos] != obj ) {
 				push(tk);
 				break;

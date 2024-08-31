@@ -52,15 +52,17 @@ class ClassExtendMacro {
 
 			var key = cl.module;
 			var fkey = cl.module + "." + cl.name;
-			if(key == "sys.thread.FixedThreadPool") return fields; // Error: Type name sys.thread.Worker_HSX is redefined from module sys.thread.FixedThreadPool
-			if(key == "StdTypes") return fields; // Error: Cant extend basic class
-			if(key == "Xml") return fields; // Error: Cant extend basic class
-			if(key == "Date") return fields; // Error: Cant extend basic class
-			if(key == "away3d.tools.commands.Mirror") return fields; // Error: Unknown identifier
-			if(key == "away3d.tools.commands.SphereMaker") return fields; // Error: Unknown identifier
-			if(key == "away3d.tools.commands.Weld") return fields; // Error: Unknown identifier
+			switch (key)
+			{
+				case "sys.thread.FixedThreadPool" // Error: Type name sys.thread.Worker_HSX is redefined from module sys.thread.
+					| "StdTypes" | "Xml" | "Date" // Error: Cant extend basic class
+					| "away3d.tools.commands.Mirror" // Error: Unknown identifier
+					| "away3d.tools.commands.SphereMaker" // Error: Unknown identifier
+					| "away3d.tools.commands.Weld" // Error: Unknown identifier
+					| "sys.thread.EventLoop": // Error: cant override force inlined
+						return fields;
+			}
 			if(fkey == "hscript.CustomClassHandler.TemplateClass") return fields; // Error: Redefined
-			if(key == "sys.thread.EventLoop") return fields; // Error: cant override force inlined
 			if(Config.DISALLOW_CUSTOM_CLASSES.contains(cl.module) || Config.DISALLOW_CUSTOM_CLASSES.contains(fkey)) return fields;
 			if(cl.module.contains("_")) return fields; // Weird issue, sorry
 
@@ -189,10 +191,12 @@ class ClassExtendMacro {
 							overrideExpr = macro {
 								var name:String = $v{name};
 
-								if (__interp != null) {
-									var v:Dynamic = null;
-									if (__interp.variables.exists(name) && Reflect.isFunction(v = __interp.variables.get(name))) {
-										return v($a{arguments});
+								if (__custom__variables != null) {
+									if(__custom__variables.exists(name)) {
+										var v:Dynamic = null;
+										if (Reflect.isFunction(v = __custom__variables.get(name))) {
+											return v($a{arguments});
+										}
 									}
 								}
 								return super.$name($a{arguments});
@@ -201,11 +205,13 @@ class ClassExtendMacro {
 							overrideExpr = macro {
 								var name:String = $v{name};
 
-								if (__interp != null) {
-									var v:Dynamic = null;
-									if (__interp != null && __interp.variables.exists(name) && Reflect.isFunction(v = __interp.variables.get(name))) {
-										v($a{arguments});
-										return;
+								if (__custom__variables != null) {
+									if(__custom__variables.exists(name)) {
+										var v:Dynamic = null;
+										if (Reflect.isFunction(v = __custom__variables.get(name))) {
+											v($a{arguments});
+											return;
+										}
 									}
 								}
 								super.$name($a{arguments});
@@ -270,11 +276,13 @@ class ClassExtendMacro {
 				pack: cl.pack.copy(),
 				name: cl.name
 			}, [
-				{name: "IHScriptCustomBehaviour", pack: ["hscript"]}
+				{name: "IHScriptCustomBehaviour", pack: ["hscript"]},
+				{name: "IHScriptCustomClassBehaviour", pack: ["hscript"]}
 			], false, true, false);
 			shadowClass.name = '${cl.name}$CLASS_SUFFIX';
 			var imports = Context.getLocalImports().copy();
 			Utils.setupMetas(shadowClass, imports);
+			Utils.processImport(imports, "hscript.UnsafeReflect", "UnsafeReflect");
 
 			// Adding hscript getters and setters
 
@@ -284,7 +292,83 @@ class ClassExtendMacro {
 				kind: FVar(TPath({
 					pack: ['hscript'],
 					name: 'Interp'
-				}))
+				})),
+				access: [APublic]
+			});
+
+			shadowClass.fields.push({
+				name: "__custom__variables",
+				pos: Context.currentPos(),
+				kind: FVar(TPath({
+					pack: [],
+					name: 'Map',
+					params: [TPType(TPath({name: "String", pack: []})), TPType(TPath({name: "Dynamic", pack: []}))]
+				})),
+				access: [APublic]
+			});
+
+			shadowClass.fields.push({
+				name: "__allowSetGet",
+				pos: Context.currentPos(),
+				kind: FVar(TPath({
+					pack: [],
+					name: 'Bool',
+				}), macro true),
+				access: [APublic]
+			});
+
+			shadowClass.fields.push({
+				name: "__callGetter",
+				pos: Context.currentPos(),
+				kind: FFun({
+					ret: TPath({name: 'Dynamic', pack: []}),
+					params: [],
+					expr: macro {
+						__allowSetGet = false;
+						var v = __custom__variables.get("get_" + name)();
+						__allowSetGet = true;
+						return v;
+					},
+					args: [
+						{
+							name: "name",
+							opt: false,
+							meta: [],
+							type: TPath({name: "String", pack: []})
+						}
+					]
+				}),
+				access: [APublic]
+			});
+
+			shadowClass.fields.push({
+				name: "__callSetter",
+				pos: Context.currentPos(),
+				kind: FFun({
+					ret: TPath({name: 'Dynamic', pack: []}),
+					params: [],
+					expr: macro {
+						__allowSetGet = false;
+						var v = __custom__variables.get("set_" + name)(val);
+						__allowSetGet = true;
+						return v;
+					},
+					args: [
+						{
+							name: "name",
+							opt: false,
+							meta: [],
+							type: TPath({name: "String", pack: []})
+						},
+						{
+							name: "val",
+							opt: false,
+							meta: [],
+							type: TPath({name: "Dynamic", pack: []})
+						}
+					]
+				}),
+				access: [APublic]
 			});
 
 			// Todo: make it possible to override
@@ -329,40 +413,38 @@ class ClassExtendMacro {
 
 			var hgetField = if(hasHgetInSuper) {
 				macro {
-					if(this.__interp.variables.exists("get_" + name))
-						return this.__interp.variables.get("get_" + name)();
-					if (this.__interp.variables.exists(name))
-						return this.__interp.variables.get(name);
+					if(__allowSetGet && __custom__variables.exists("get_" + name))
+						return __callGetter(name);
+					if (__custom__variables.exists(name))
+						return __custom__variables.get(name);
 					return super.hget(name);
 				}
 			} else {
 				macro {
-					if(this.__interp.variables.exists("get_" + name))
-						return this.__interp.variables.get("get_" + name)();
-					if (this.__interp.variables.exists(name))
-						return this.__interp.variables.get(name);
+					if(__allowSetGet && __custom__variables.exists("get_" + name))
+						return __callGetter(name);
+					if (__custom__variables.exists(name))
+						return __custom__variables.get(name);
 					return Reflect.getProperty(this, name);
 				}
 			}
 
 			var hsetField = if(hasHsetInSuper) {
 				macro {
-					if(this.__interp.variables.exists("set_" + name)) {
-						return this.__interp.variables.get("set_" + name)(val); // TODO: Prevent recursion from setting it in the function
-					}
-					if (this.__interp.variables.exists(name)) {
-						this.__interp.variables.set(name, val);
+					if(__allowSetGet && __custom__variables.exists("set_" + name))
+						return __callSetter(name, val);
+					if (__custom__variables.exists(name)) {
+						__custom__variables.set(name, val);
 						return val;
 					}
-					return super.hset(name, val);
+					return super.hset(this, name);
 				}
 			} else {
 				macro {
-					if(this.__interp.variables.exists("set_" + name)) {
-						return this.__interp.variables.get("set_" + name)(val); // TODO: Prevent recursion from setting it in the function
-					}
-					if (this.__interp.variables.exists(name)) {
-						this.__interp.variables.set(name, val);
+					if(__allowSetGet && __custom__variables.exists("set_" + name))
+						return __callSetter(name, val);
+					if (__custom__variables.exists(name)) {
+						__custom__variables.set(name, val);
 						return val;
 					}
 					Reflect.setProperty(this, name, val);

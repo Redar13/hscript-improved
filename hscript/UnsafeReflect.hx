@@ -1,8 +1,5 @@
 package hscript;
 
-// from test branch
-// only works if exists define "hscript_test_reflect"
-
 #if cpp
 import cpp.ObjectType;
 #end
@@ -71,15 +68,8 @@ class UnsafeReflect {
 		#end
 	}
 
-	public #if !cpp inline #end static function callMethod(o:Dynamic, func:haxe.Constraints.Function, args:Array<Dynamic>):Dynamic {
-		#if cpp
-		untyped {
-			untyped func.__SetThis(o);
-			return untyped func.__Run(args);
-		}
-		#else
+	public inline static function callMethod(o:Dynamic, func:haxe.Constraints.Function, args:Array<Dynamic>):Dynamic {
 		return Reflect.callMethod(o, func, args);
-		#end
 	}
 
 	public #if !cpp inline #end static function callMethodSafe(o:Dynamic, func:haxe.Constraints.Function, args:Array<Dynamic>):Dynamic {

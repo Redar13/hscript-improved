@@ -21,6 +21,16 @@
  */
 package hscript;
 
+typedef Int8 = #if cpp cpp.Int8 #else Int #end;
+typedef Int16 = #if cpp cpp.Int16 #else Int #end;
+typedef Int32 = #if cpp cpp.Int32 #else Int #end;
+typedef Int64 = #if cpp cpp.Int64 #else Int #end;
+
+typedef UInt8 = #if cpp cpp.UInt8 #else Int #end;
+typedef UInt16 = #if cpp cpp.UInt16 #else Int #end;
+typedef UInt32 = #if cpp cpp.UInt32 #else Int #end;
+typedef UInt64 = #if cpp cpp.UInt64 #else Int #end;
+
 enum Const {
 	CInt( v : Int );
 	CFloat( f : Float );
@@ -31,12 +41,13 @@ enum Const {
 }
 
 #if hscriptPos
-typedef Expr = {
-	var e : ExprDef;
-	var pmin : Int;
-	var pmax : Int;
-	var origin : String;
-	var line : Int;
+@:structInit
+final class Expr {
+	public var e : ExprDef;
+	public var pmin : Int;
+	public var pmax : Int;
+	public var origin : String;
+	public var line : Int;
 }
 enum ExprDef {
 #else
@@ -66,7 +77,7 @@ enum Expr {
 	ETry( e : Expr, v : String, t : Null<CType>, ecatch : Expr );
 	EObject( fl : Array<{ name : String, e : Expr }> );
 	ETernary( cond : Expr, e1 : Expr, e2 : Expr );
-	ESwitch( e : Expr, cases : Array<{ values : Array<Expr>, expr : Expr }>, ?defaultExpr : Expr );
+	ESwitch( e : Expr, cases : Array<SwitchCase>, ?defaultExpr : Expr );
 	EDoWhile( cond : Expr, e : Expr);
 	EMeta( name : String, args : Array<Expr>, e : Expr );
 	ECheckType( e : Expr, t : CType );
@@ -74,6 +85,12 @@ enum Expr {
 	EImport( c : String, ?asname:String );
 	EImportStar( c : String );
 	EClass( name:String, fields:Array<Expr>, ?extend:String, interfaces:Array<String> );
+}
+
+@:structInit
+final class SwitchCase {
+	public var values : Array<Expr>;
+	public var expr : Expr;
 }
 
 typedef Argument = { name : String, ?t : CType, ?opt : Bool, ?value : Expr };
@@ -158,13 +175,13 @@ typedef FieldDecl = {
 	var access : Array<FieldAccess>;
 }
 
-enum FieldAccess {
-	APublic;
-	APrivate;
-	AInline;
-	AOverride;
-	AStatic;
-	AMacro;
+enum abstract FieldAccess(UInt8) {
+	var APublic;
+	var APrivate;
+	var AInline;
+	var AOverride;
+	var AStatic;
+	var AMacro;
 }
 
 enum FieldKind {
