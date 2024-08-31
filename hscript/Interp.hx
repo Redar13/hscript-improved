@@ -386,8 +386,7 @@ class Interp {
 							}
 							return obj.hset(id, v);
 						} else if(_scriptObjectType == SBehaviourClass) {
-							var obj = cast(scriptObject, IHScriptCustomBehaviour);
-							return obj.hset(id, v);
+							return cast(scriptObject, IHScriptCustomBehaviour).hset(id, v);
 						}
 
 						if (isBypassAccessor) {
