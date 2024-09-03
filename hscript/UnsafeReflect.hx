@@ -52,7 +52,7 @@ class UnsafeReflect {
 			o.__SetField(field, value, untyped __cpp__("::hx::paccAlways"));
 		}
 		#else
-		Reflect.setProperty(o, field);
+		Reflect.setProperty(o, field, value);
 		#end
 	}
 
@@ -64,7 +64,7 @@ class UnsafeReflect {
 			return untyped func.__Run(args);
 		}
 		#else
-		return Reflect.callMethod(o, func, args);
+		return Reflect.callMethod(o, Reflect.field(o, field), args);
 		#end
 	}
 

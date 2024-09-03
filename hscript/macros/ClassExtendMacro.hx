@@ -42,7 +42,6 @@ class ClassExtendMacro {
 		if (cl.isAbstract || cl.isExtern || cl.isFinal || cl.isInterface) return fields;
 		if (!cl.name.endsWith("_Impl_") && !cl.name.endsWith(CLASS_SUFFIX) && !cl.name.endsWith("_HSC")) {
 			var metas = cl.meta.get();
-
 			for(m in metas)
 				if (unallowedMetas.contains(m.name))
 					return fields;
@@ -140,9 +139,7 @@ class ClassExtendMacro {
 			}
 			*/
 
-			var shadowClass = macro class {
-
-			};
+			var shadowClass = macro class { };
 
 			var definedFields:Array<String> = [];
 
@@ -189,12 +186,10 @@ class ClassExtendMacro {
 
 						if (returns) {
 							overrideExpr = macro {
-								var name:String = $v{name};
-
 								if (__custom__variables != null) {
-									if(__custom__variables.exists(name)) {
+									if(__custom__variables.exists($v{name})) {
 										var v:Dynamic = null;
-										if (Reflect.isFunction(v = __custom__variables.get(name))) {
+										if (Reflect.isFunction(v = __custom__variables.get($v{name}))) {
 											return v($a{arguments});
 										}
 									}
@@ -203,12 +198,10 @@ class ClassExtendMacro {
 							};
 						} else {
 							overrideExpr = macro {
-								var name:String = $v{name};
-
 								if (__custom__variables != null) {
-									if(__custom__variables.exists(name)) {
+									if(__custom__variables.exists($v{name})) {
 										var v:Dynamic = null;
-										if (Reflect.isFunction(v = __custom__variables.get(name))) {
+										if (Reflect.isFunction(v = __custom__variables.get($v{name}))) {
 											v($a{arguments});
 											return;
 										}
@@ -285,7 +278,6 @@ class ClassExtendMacro {
 			Utils.processImport(imports, "hscript.UnsafeReflect", "UnsafeReflect");
 
 			// Adding hscript getters and setters
-
 			shadowClass.fields.push({
 				name: "__interp",
 				pos: Context.currentPos(),

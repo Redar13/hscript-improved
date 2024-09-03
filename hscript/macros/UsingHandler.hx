@@ -47,22 +47,22 @@ class UsingHandler {
 			}
 			if(Config.DISALLOW_ABSTRACT_AND_ENUM.contains(key) || Config.DISALLOW_ABSTRACT_AND_ENUM.contains(fkey)) return fields;
 
-			var shadowClass = macro class {
-
-			};
+			var shadowClass = macro class { };
 			shadowClass.kind = TDClass();
 			shadowClass.params = switch(cl.params.length) {
 				case 0:
 					null;
+				/*
 				case 1:
 					[{
 						name: "T",
 					}];
+				*/
 				default:
 					[for(k=>e in cl.params) {
-						name: "T" + Std.int(k+1)
+						name: e.name
 					}];
-			};
+			}
 			shadowClass.name = '${cl.name.substr(0, cl.name.length - 6)}_HSC';
 
 			var imports = Context.getLocalImports().copy();
@@ -72,7 +72,18 @@ class UsingHandler {
 			for(f in fields)
 				switch(f.kind) {
 					case FFun(fun):
-						if (f.access.contains(AStatic)) {
+						/* // TODO: Allow non static functions
+						if (f.access.contains(AMacro))
+							continue;
+						for (i in fun.args)
+							if (i.type != null && i.type.match(TPath({name: "T"})))
+								i.type = TPath({name: "Dynamic", pack:[]});
+						*/
+						// if (fun.ret.match(TPath({name: "T"})))
+						// 	fun.ret = TPath({name: "Dynamic", pack:[]});
+						// fun.ret = null;
+						if (f.access.contains(AStatic))
+						{
 							if (fun.expr != null) {
 								fun.expr = macro @:privateAccess $e{fun.expr};
 
