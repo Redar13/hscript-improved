@@ -28,13 +28,17 @@
  */
 package hscript;
 
+import haxe.display.Protocol.InitializeResult;
 import haxe.iterators.StringKeyValueIteratorUnicode;
 import haxe.EnumTools;
-import haxe.display.Protocol.InitializeResult;
 import haxe.PosInfos;
-import hscript.Expr;
 import haxe.Constraints.IMap;
+
+import hscript.custom_classes.PolymodAbstractScriptClass;
+import hscript.custom_classes.PolymodClassDeclEx;
+import hscript.custom_classes.PolymodScriptClass;
 import hscript.macros.ClassTools;
+import hscript.Expr;
 import hscript.UnsafeReflect;
 
 using StringTools;
@@ -75,7 +79,7 @@ class Interp {
 		switch(Type.typeof(v)) {
 			case TClass(c): // Class Access
 				__instanceFields = Type.getInstanceFields(c);
-				if(c is IHScriptCustomClassBehaviour) {
+				if(c is HScriptedClass) {
 					_scriptObjectType = SCustomClass;
 				} else if(c is IHScriptCustomBehaviour) {
 					_scriptObjectType = SBehaviourClass;
@@ -141,7 +145,9 @@ class Interp {
 	var curExpr:Expr;
 	#end
 
-	public function new() {
+	var _proxy:PolymodAbstractScriptClass = null;
+
+	public function new(?targetObj:Dynamic, ?proxy:PolymodAbstractScriptClass) {
 		#if haxe3
 		locals = new Map();
 		#else
@@ -150,6 +156,9 @@ class Interp {
 		declared = new Array();
 		resetVariables();
 		initOps();
+		_proxy = proxy;
+		if (targetObj == null)
+			scriptObject = targetObj;
 	}
 
 	private function resetVariables() {
@@ -256,7 +265,18 @@ class Interp {
 		return allowStaticVariables && staticVariables.exists(name) || allowPublicVariables && publicVariables.exists(name) || variables.exists(name);
 	}
 
+	public static function findScriptClassDescriptor(name:String)
+	{
+		return _scriptClassDescriptors.get(name);
+	}
+
 	public function setVar(name:String, v:Dynamic) {
+		if (_proxy != null && _proxy.superClass != null && _proxy.superHasField(name))
+		{
+			// Set in super class.
+			UnsafeReflect.setProperty(_proxy.superClass, name, v);
+			return;
+		}
 		if (allowStaticVariables && staticVariables.exists(name))
 			staticVariables.set(name, v);
 		else if (allowPublicVariables && publicVariables.exists(name))
@@ -298,13 +318,20 @@ class Interp {
 		var v = expr(e2);
 		switch (Tools.expr(e1)) {
 			case EIdent(id):
+				if (_proxy != null && _proxy.superClass != null
+						&& _proxy.superHasField(id))
+				{
+					var v = expr(e2);
+					UnsafeReflect.setProperty(_proxy.superClass, id, v);
+					return v;
+				}
 				if (!locals.exists(id)) {
 					if (_hasScriptObject && !varExists(id)) {
 						if (_scriptObjectType == SObject) {
 							UnsafeReflect.setField(scriptObject, id, v);
 						} else {
-							if (_scriptObjectType == SCustomClass) {
-								var obj = cast(scriptObject, IHScriptCustomClassBehaviour);
+							/*if (_scriptObjectType == SCustomClass) {
+								var obj = cast(scriptObject, HScriptedClass);
 								if(isBypassAccessor) {
 									obj.__allowSetGet = false;
 									var res = obj.hset(id, v);
@@ -312,7 +339,9 @@ class Interp {
 									return res;
 								}
 								return obj.hset(id, v);
-							} else if (_scriptObjectType == SBehaviourClass) {
+							} else
+							*/
+							if (_scriptObjectType == SBehaviourClass) {
 								return cast(scriptObject, IHScriptCustomBehaviour).hset(id, v);
 							}
 							if (isBypassAccessor) {
@@ -341,6 +370,20 @@ class Interp {
 				}
 				// TODO
 			case EField(e, f, s):
+				// Make sure setting superclass fields works when using this.
+				// Also ensures property functions are accounted for.
+				switch (Tools.expr(e))
+				{
+					case EIdent(id0):
+						if (id0 == "this" && _proxy != null && _proxy.superClass != null && _proxy.superHasField(id0))
+						{
+							var v = expr(e2);
+							UnsafeReflect.setProperty(_proxy.superClass, id0, v);
+							return v;
+						}
+					default:
+						// Do nothing
+				}
 				var obj = expr(e);
 				if(s && obj == null) return null;
 				v = set(obj, f, v);
@@ -375,8 +418,8 @@ class Interp {
 						if(_scriptObjectType == SObject) {
 							UnsafeReflect.setField(scriptObject, id, v);
 							return v;
-						} else if (_scriptObjectType == SCustomClass) {
-							var obj = cast(scriptObject, IHScriptCustomClassBehaviour);
+						} /*else if (_scriptObjectType == SCustomClass) {
+							var obj = cast(scriptObject, HScriptedClass);
 							if(isBypassAccessor) {
 								obj.__allowSetGet = false;
 								var res = obj.hset(id, v);
@@ -384,7 +427,7 @@ class Interp {
 								return res;
 							}
 							return obj.hset(id, v);
-						} else if(_scriptObjectType == SBehaviourClass) {
+						}*/ else if(_scriptObjectType == SBehaviourClass) {
 							return cast(scriptObject, IHScriptCustomBehaviour).hset(id, v);
 						}
 
@@ -572,8 +615,20 @@ class Interp {
 	}
 
 	public function resolve(id:String, doException:Bool = true):Dynamic {
-		if (id == null)
-			return null;
+		switch id
+		{
+			case null | "null" | "_": return null;
+			case "this" if (_proxy != null): return _proxy;
+			case "super" if (_proxy != null):
+				if (_proxy.superClass == null)
+				{
+					return _proxy.superConstructor;
+				}
+				else
+				{
+					return _proxy.superClass;
+				}
+		}
 		id = StringTools.trim(id);
 		if (locals.exists(id))
 			return locals.get(id).r;
@@ -594,8 +649,8 @@ class Interp {
 				return scriptObject;
 			} else if (_scriptObjectType == SObject && UnsafeReflect.hasField(scriptObject, id)) {
 				return UnsafeReflect.field(scriptObject, id);
-			} else if(_scriptObjectType == SCustomClass) {
-				var obj = cast(scriptObject, IHScriptCustomClassBehaviour);
+			} /*else if(_scriptObjectType == SCustomClass) {
+				var obj = cast(scriptObject, HScriptedClass);
 				if(isBypassAccessor) {
 					obj.__allowSetGet = false;
 					var res = obj.hget(id);
@@ -603,7 +658,7 @@ class Interp {
 					return res;
 				}
 				return obj.hget(id);
-			} else if(_scriptObjectType == SBehaviourClass) {
+			}*/ else if(_scriptObjectType == SBehaviourClass) {
 				var obj = cast(scriptObject, IHScriptCustomBehaviour);
 				return obj.hget(id);
 			}
@@ -624,6 +679,25 @@ class Interp {
 			return cl;
 		}
 
+		// We are calling a LOCAL function from the same module.
+		if (_proxy != null)
+		{
+			if (_proxy.findFunction(id, true) != null)
+			{
+				return _proxy.resolveField(id);
+			}
+			if (_proxy.superHasField(id))
+			{
+				return Reflect.getProperty(_proxy.superClass, id);
+			}
+			try
+			{
+				return _proxy.resolveField(id);
+			}
+			catch (e:Dynamic)
+			{
+			}
+		}
 		if (doException)
 			error(EUnknownVariable(id));
 		return null;
@@ -636,6 +710,54 @@ class Interp {
 		#end
 		switch (e) {
 			case EClass(name, fields, extend, interfaces):
+				if (extend != null)
+				{
+					var superClassPath = extend;
+					/*
+					if (!imports.exists(superClassPath)) {
+						switch (extend) {
+							case CTPath(path, params):
+								if (params.length > 0) {
+									errorEx(EClassUnresolvedSuperclass(superClassPath, 'do not include type parameters in super class name'));
+								}
+							default:
+								// Other error handling?
+						}
+						// Default
+						errorEx(EClassUnresolvedSuperclass(superClassPath, 'not recognized, is the type imported?'));
+					}
+					*/
+
+					/*
+					var extendImport = imports.get(superClassPath);
+					if (extendImport != null)
+					{
+						if (extendImport.cls == null)
+							errorEx(EClassUnresolvedSuperclass(superClassPath, 'expected a class'));
+
+						switch (extend)
+						{
+							case CTPath(_, params):
+								extend = CTPath(imports.get(superClassPath).fullPath.split('.'), params);
+							case _:
+						}
+					}
+					*/
+				}
+				var classDecl:ClassDeclEx = {
+					imports: [],
+					pkg: null,
+					name: name,
+					params: null,
+					meta: null,
+					isPrivate: false,
+					extend: null,
+					implement: null,
+					fields: [],
+					isExtern: false
+				};
+				registerScriptClass(classDecl);
+				/*
 				if (customClasses.exists(name))
 					error(EAlreadyExistingClass(name));
 
@@ -646,6 +768,7 @@ class Interp {
 					return variable == null ? thing : Type.getClassName(variable);
 				}
 				customClasses.set(name, new CustomClassHandler(this, name, fields, importVar(extend), [for (i in interfaces) importVar(i)]));
+				*/
 			case EImportStar(pkg):
 				#if !macro
 				if (!importEnabled)
@@ -1021,10 +1144,7 @@ class Interp {
 					return arr[index];
 				}
 			case ENew(cl, params):
-				var a = new Array();
-				for (e in params)
-					a.push(expr(e));
-				return cnew(cl, a);
+				return cnew(cl, [for (e in params) expr(e)]);
 			case EThrow(e):
 				throw expr(e);
 			case ETry(e, n, _, ecatch):
@@ -1110,6 +1230,151 @@ class Interp {
 		} while (expr(econd) == true);
 		restore(old);
 	}
+
+	public function addModule(moduleContents:String, ?origin:String = "hscript")
+	{
+		static var parser = new hscript.Parser();
+		var decls = parser.parseModule(moduleContents, origin);
+		registerModule(decls, origin);
+	}
+
+	public static function createScriptClassInstance(className:String, args:Array<Dynamic> =null):PolymodAbstractScriptClass
+	{
+		if (args == null)
+		{
+			args = [];
+		}
+		if (_scriptClassDescriptors.exists(className))
+		{
+			// OVERRIDE CHANGE: Create a PolymodScriptClass instead of a hscript.ScriptClass
+			var proxy:PolymodAbstractScriptClass = new PolymodScriptClass(_scriptClassDescriptors.get(className), args);
+			return proxy;
+		}
+		return null;
+	}
+	public function registerModule(module:Array<ModuleDecl>, ?origin:String = "hscript")
+	{
+		var pkg:Array<String> = null;
+		var imports:Map<String, ClassImport> = [];
+
+		/*
+		for (importPath in PolymodScriptClass.defaultImports.keys())
+		{
+			var splitPath = importPath.split(".");
+			var clsName = splitPath[splitPath.length - 1];
+
+			imports.set(clsName, {
+				name: clsName,
+				pkg: splitPath.slice(0, splitPath.length - 1),
+				fullPath: importPath,
+				cls: PolymodScriptClass.defaultImports.get(importPath),
+			});
+		}
+		*/
+
+		for (decl in module)
+		{
+			switch (decl)
+			{
+				case DPackage(path):
+					pkg = path;
+				case DImport(path, _):
+					var clsName = path[path.length - 1];
+
+					if (imports.exists(clsName))
+					{
+						continue;
+					}
+
+					var importedClass:ClassImport = {
+						name: clsName,
+						pkg: path.slice(0, path.length - 1),
+						fullPath: path.join("."),
+						cls: null,
+						enm: null
+					};
+
+					if (PolymodScriptClass.importOverrides.exists(importedClass.fullPath)) {
+						// importOverrides can exist but be null (if it was set to null).
+						// If so, that means the class is blacklisted.
+
+						importedClass.cls = PolymodScriptClass.importOverrides.get(importedClass.fullPath);
+					} else {
+						var result:Class<Dynamic> = cast resolve(importedClass.fullPath);
+
+						// If the class is not found, try to find it as an enum.
+						// If the class is still not found, skip this import entirely.
+						if (result == null) {
+							continue;
+						} else if (result != null) {
+							importedClass.cls = result;
+						}
+					}
+
+					imports.set(importedClass.name, importedClass);
+				case DClass(c):
+					var extend = c.extend;
+					if (extend != null)
+					{
+						static var staticPrinter = new hscript.Printer();
+						var superClassPath = staticPrinter.typeToString(extend);
+						if (!imports.exists(superClassPath)) {
+							// switch (extend) {
+							// 	case CTPath(path, params):
+							// 		if (params.length > 0) {
+							// 			errorEx(EClassUnresolvedSuperclass(superClassPath, 'do not include type parameters in super class name'));
+							// 		}
+							// 	default:
+							// 		// Other error handling?
+							// }
+							// // Default
+							// errorEx(EClassUnresolvedSuperclass(superClassPath, 'not recognized, is the type imported?'));
+							// errorEx(EClassUnresolvedSuperclass(superClassPath, 'not recognized, is the type imported?'));
+						}
+
+						if (imports.exists(superClassPath))
+						{
+							var extendImport = imports.get(superClassPath);
+							// if (extendImport.cls == null)
+							// 	errorEx(EClassUnresolvedSuperclass(superClassPath, 'expected a class'));
+
+							switch (extend)
+							{
+								case CTPath(_, params):
+									extend = CTPath(imports.get(superClassPath).fullPath.split('.'), params);
+								case _:
+							}
+						}
+					}
+					var classDecl:ClassDeclEx = {
+						imports: imports,
+						pkg: pkg,
+						name: c.name,
+						params: c.params,
+						meta: c.meta,
+						isPrivate: c.isPrivate,
+						extend: extend,
+						implement: c.implement,
+						fields: c.fields,
+						isExtern: c.isExtern
+					}
+					registerScriptClass(classDecl);
+				case DTypedef(_):
+			}
+		}
+	}
+	private static function registerScriptClass(c:ClassDeclEx)
+	{
+		var name = c.name;
+		if (c.pkg != null)
+		{
+			name = c.pkg.join(".") + "." + name;
+		}
+		_scriptClassDescriptors.set(name, c);
+	}
+
+
+	private static var _scriptClassDescriptors:Map<String, ClassDeclEx> = new Map<String, ClassDeclEx>();
 
 	function whileLoop(econd, e) {
 		var old = declared.length;
@@ -1206,7 +1471,8 @@ class Interp {
 	public var useRedirects:Bool = false;
 
 	static function getClassType(o:Dynamic, ?cls:Class<Any>):Null<String> {
-		return switch (Type.typeof(o)) {
+		return switch Type.typeof(o)
+		{
 			case TNull: "Null";
 			case TInt: "Int";
 			case TFloat: "Float";
@@ -1215,7 +1481,7 @@ class Interp {
 				if (cls == null)
 					cls = Type.getClass(o);
 				cls != null ? Type.getClassName(cls) : null;
-		};
+		}
 	}
 	function get(o:Dynamic, f:String):Dynamic {
 		if (o == null)
@@ -1226,19 +1492,35 @@ class Interp {
 			cl != null && getRedirects.exists(cl) && (_getRedirect = getRedirects[cl]) != null;
 		}) {
 			return _getRedirect(o, f);
-		} else if (o is IHScriptCustomBehaviour) {
-			var obj = cast(o, IHScriptCustomBehaviour);
-			return obj.hget(f);
+		}
+		if (o is PolymodScriptClass) {
+			var proxy:PolymodAbstractScriptClass = cast(o, PolymodScriptClass);
+			if (proxy._interp.variables.exists(f))
+			{
+				return proxy._interp.variables.get(f);
+			}
+			else if (proxy.superClass != null && proxy.superHasField(f))
+			{
+				return Reflect.getProperty(proxy.superClass, f);
+			}
+			else
+			{
+				try
+				{
+					return proxy.resolveField(f);
+				}
+				catch (e:Dynamic)
+				{
+				}
+				// errorEx(EUnknownVariable(f));
+			}
 		}
 		var v = null;
-		if(isBypassAccessor) {
-			if ((v = Reflect.field(o, f)) == null)
-				v = Reflect.field(cls, f);
+		if(isBypassAccessor && (v = Reflect.field(o, f)) == null){
+			v = Reflect.field(cls, f);
 		}
-
-		if(v == null) {
-			if ((v = Reflect.getProperty(o, f)) == null)
-				v = Reflect.getProperty(cls, f);
+		if(v == null && (v = Reflect.getProperty(o, f)) == null){
+			v = Reflect.getProperty(cls, f);
 		}
 		return v;
 	}
@@ -1252,8 +1534,23 @@ class Interp {
 			cl != null && setRedirects.exists(cl) && (_setRedirect = setRedirects[cl]) != null;
 		})
 			return _setRedirect(o, f, v);
-		else if (o is IHScriptCustomBehaviour)
-			return cast(o, IHScriptCustomBehaviour).hset(f, v);
+		if (o is PolymodScriptClass)
+		{
+			var proxy:PolymodScriptClass = cast(o, PolymodScriptClass);
+			if (proxy._interp.variables.exists(f))
+			{
+				proxy._interp.variables.set(f, v);
+			}
+			else if (proxy.superClass != null && UnsafeReflect.hasField(proxy.superClass, f))
+			{
+				UnsafeReflect.setProperty(proxy.superClass, f, v);
+			}
+			else if (proxy.superClass != null && UnsafeReflect.hasField(_proxy.superClass, f))
+			{
+				UnsafeReflect.setProperty(proxy.superClass, f, v);
+			}
+			return v;
+		}
 		if(isBypassAccessor)
 			UnsafeReflect.setField(o, f, v);
 		else
@@ -1262,17 +1559,65 @@ class Interp {
 	}
 
 	function fcall(o:Dynamic, f:String, args:Array<Dynamic>):Dynamic {
-		if(o == CustomClassHandler.staticHandler && scriptObject != null) {
-			return UnsafeReflect.callMethod(scriptObject, UnsafeReflect.field(scriptObject, "_HX_SUPER__" + f), args);
+		// OVERRIDE CHANGE: Custom logic to handle super calls to prevent infinite recursion
+		if (_proxy != null && o == _proxy.superClass)
+		{
+			// Force call super function.
+			return fcall(o, '__super_${f}', args);
 		}
-		return call(o, get(o, f), args);
+		else if (Std.isOfType(o, PolymodScriptClass))
+		{
+			return cast(o, PolymodScriptClass).callFunction(f, args);
+		}
+
+		var func = get(o, f);
+
+		#if html
+		// Workaround for an HTML5-specific issue.
+		// https://github.com/HaxeFoundation/haxe/issues/11298
+		if (func == null && f == "contains") {
+			func = get(o, "includes");
+		}
+		#end
+
+		// if(o == CustomClassHandler.staticHandler && scriptObject != null) {
+		// 	return UnsafeReflect.callMethod(scriptObject, UnsafeReflect.field(scriptObject, "_HX_SUPER__" + f), args);
+		// }
+		return call(o, func, args);
 	}
 
 	function call(o:Dynamic, f:Dynamic, args:Array<Dynamic>):Dynamic {
-		if(f == CustomClassHandler.staticHandler) {
-			return null;
+		if (o != null && o == _proxy)
+		{
+			// If we are calling this.fn(), special handling is needed to prevent the local scope from being destroyed.
+			// By checking `target == _proxy`, we handle BOTH fn() and this.fn().
+			// super.fn() is exempt since it is not scripted.
+			return callThis(f, args);
 		}
+		// if(f == CustomClassHandler.staticHandler) {
+		// 	return null;
+		// }
 		return UnsafeReflect.callMethod(o, f, args);
+	}
+	function callThis(fun:Dynamic, args:Array<Dynamic>):Dynamic
+	{
+		// If we are calling this.fn(), special handling is needed to prevent the local scope from being destroyed.
+		// Store the local scope.
+		var capturedLocals = this.duplicate(locals);
+		var capturedDeclared = this.declared;
+		var capturedDepth = this.depth;
+
+		this.depth++;
+
+		// Call the function.
+		var result = UnsafeReflect.callMethod(_proxy, fun, args);
+
+		// Restore the local scope.
+		this.locals = capturedLocals;
+		this.declared = capturedDeclared;
+		this.depth = capturedDepth;
+
+		return result;
 	}
 
 	function cnew(cl:String, args:Array<Dynamic>):Dynamic {
@@ -1280,6 +1625,6 @@ class Interp {
 		var c:Dynamic = resolve(cl);
 		if (c == null)
 			c = Type.resolveClass(cl);
-		return (c is IHScriptCustomConstructor) ? cast(c, IHScriptCustomConstructor).hnew(args) : Type.createInstance(c, args);
+		return Type.createInstance(c, args);
 	}
 }

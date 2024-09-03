@@ -51,6 +51,25 @@ class ClassExtendMacro {
 
 			var key = cl.module;
 			var fkey = cl.module + "." + cl.name;
+
+			var shadowClass = macro class { };
+			shadowClass.kind = TDClass({
+				pack: cl.pack.copy(),
+				name: cl.name
+			}, [
+				{name: "HScriptedClass", pack: ["hscript"]}
+			], false, true, false);
+			shadowClass.name = '${cl.name}$CLASS_SUFFIX';
+			/*
+			var imports = Context.getLocalImports().copy();
+			Utils.setupMetas(shadowClass, imports);
+			*/
+
+			Context.defineModule(cl.module, [shadowClass]/*, imports*/);
+			/*
+
+			var key = cl.module;
+			var fkey = cl.module + "." + cl.name;
 			switch (key)
 			{
 				case "sys.thread.FixedThreadPool" // Error: Type name sys.thread.Worker_HSX is redefined from module sys.thread.
@@ -64,80 +83,6 @@ class ClassExtendMacro {
 			if(fkey == "hscript.CustomClassHandler.TemplateClass") return fields; // Error: Redefined
 			if(Config.DISALLOW_CUSTOM_CLASSES.contains(cl.module) || Config.DISALLOW_CUSTOM_CLASSES.contains(fkey)) return fields;
 			if(cl.module.contains("_")) return fields; // Weird issue, sorry
-
-			var superFields = [];
-			/*
-			if(cl.superClass != null) {
-				var _superFields = cl.superClass.t.get().fields.get();
-				_superFields = []; // Comment to enable super support, (broken)
-				for(field in _superFields) {
-					if(!field.kind.match(FMethod(_))) // only catch methods
-						continue;
-
-					try {
-						var nfield = @:privateAccess TypeTools.toField(field);
-						switch ([field.kind, field.type]) {
-							case [FMethod(kind), TFun(args, ret)]:
-								if(kind == MethInline)
-									nfield.access.push(AInline);
-								if(kind == MethDynamic)
-									nfield.access.push(ADynamic);
-							default:
-						}
-
-						switch(nfield.kind) {
-							case FFun(fun):
-								if (fun.params != null && fun.params.length > 0)
-									continue;
-
-								fun.ret = Utils.fixStdTypes(fun.ret);
-
-								var metas = nfield.meta;
-								var defaultValues:Map<String, Dynamic> = [];
-								var defaultEntry = null;
-								var isGeneric = false;
-								for(m in metas) {
-									if(m.name == ":value") {
-										defaultEntry = m;
-										switch(m.params[0].expr) {
-											case EObjectDecl(fields):
-												for(fil in fields)
-													defaultValues[fil.field] = fil.expr;
-											default:
-										}
-									}
-									if(m.name == ":generic")
-										isGeneric = true;
-								}
-								if(isGeneric) continue;
-
-								if(defaultEntry != null)
-									metas.remove(defaultEntry);
-
-								for(arg in fun.args) {
-									var opt = false;
-									if(defaultValues.exists(arg.name)) {
-										arg.value = defaultValues[arg.name];
-										arg.opt = false;
-									}
-
-									arg.type = Utils.fixStdTypes(arg.type);
-
-									if(arg.opt) {
-										if(arg.type.getParameters()[0].name != "Null")
-											arg.type = TPath({name: "Null", params: [TPType(arg.type)], pack: []});//macro {Null<Dynamic>};
-									}
-								}
-							default:
-						}
-						superFields.push(nfield);
-					} catch(e) {
-						// trace(e);
-					}
-				}
-				//superFields = [];
-			}
-			*/
 
 			var shadowClass = macro class { };
 
@@ -491,6 +436,7 @@ class ClassExtendMacro {
 					]
 				})
 			});
+			*/
 
 			/*var p = new Printer();
 			var aa = p.printTypeDefinition(shadowClass);
@@ -499,7 +445,7 @@ class ClassExtendMacro {
 			if(aa.indexOf("pack") >= 0)
 			if(cl.name == "FunkinShader")*/
 
-			Context.defineModule(cl.module, [shadowClass], imports);
+			// Context.defineModule(cl.module, [shadowClass], imports);
 		}
 
 		return fields;
