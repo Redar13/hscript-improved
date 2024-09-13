@@ -630,28 +630,8 @@ class Parser {
 				nextIsOverride = true;
 				var nextToken = token();
 				switch(nextToken) {
-					case TId("private"):
-						var str = parseStructure("private"); // override private
-						nextIsOverride = false;
-						str;
-					case TId("public"):
-						var str = parseStructure("public"); // override public
-						nextIsOverride = false;
-						str;
-					case TId("function"):
-						var str = parseStructure("function"); // override function
-						nextIsOverride = false;
-						str;
-					case TId("static"):
-						var str = parseStructure("static"); // override static
-						nextIsOverride = false;
-						str;
-					case TId("var"):
-						var str = parseStructure("var"); // override var
-						nextIsOverride = false;
-						str;
-					case TId("final"):
-						var str = parseStructure("final"); // override final
+					case TId(_i = "private" | "public" | "function" | "static" | "var" | "final"):
+						var str = parseStructure(_i);
 						nextIsOverride = false;
 						str;
 					default:
@@ -663,28 +643,8 @@ class Parser {
 				nextIsStatic = true;
 				var nextToken = token();
 				switch(nextToken) {
-					case TId("private"):
-						var str = parseStructure("private"); // static private
-						nextIsStatic = false;
-						str;
-					case TId("public"):
-						var str = parseStructure("public"); // static public
-						nextIsStatic = false;
-						str;
-					case TId("function"):
-						var str = parseStructure("function"); // static function
-						nextIsStatic = false;
-						str;
-					case TId("override"):
-						var str = parseStructure("override"); // static override
-						nextIsStatic = false;
-						str;
-					case TId("var"):
-						var str = parseStructure("var"); // static var
-						nextIsStatic = false;
-						str;
-					case TId("final"):
-						var str = parseStructure("final"); // static final
+					case TId(_i = "private" | "public" | "function" | "override" | /* "class" |*/ "var" | "final"):
+						var str = parseStructure(_i);
 						nextIsStatic = false;
 						str;
 					default:
@@ -696,34 +656,14 @@ class Parser {
 				nextIsPublic = true;
 				var nextToken = token();
 				switch(nextToken) {
-					case TId("class"):
-						var str = parseStructure("class"); // public class
+					case TId(_i = "class" | "static" | "function" | "override" | "var" | "final"):
+						var str = parseStructure(_i);
 						nextIsPublic = false;
 						str;
 					//case TId("private"):
 					//	var str = parseStructure("private"); // public private
 					//	nextIsPublic = false;
 					//	str;
-					case TId("static"):
-						var str = parseStructure("static"); // public static
-						nextIsPublic = false;
-						str;
-					case TId("function"):
-						var str = parseStructure("function"); // public function
-						nextIsPublic = false;
-						str;
-					case TId("override"):
-						var str = parseStructure("override"); // public override
-						nextIsPublic = false;
-						str;
-					case TId("var"):
-						var str = parseStructure("var"); // public var
-						nextIsPublic = false;
-						str;
-					case TId("final"):
-						var str = parseStructure("final"); // public final
-						nextIsPublic = false;
-						str;
 					default:
 						unexpected(nextToken);
 						nextIsPublic = false;
@@ -733,28 +673,8 @@ class Parser {
 				nextIsPrivate = true;
 				var nextToken = token();
 				switch(nextToken) {
-					case TId("static"):
-						var str = parseStructure("static"); // private static
-						nextIsPrivate = false;
-						str;
-					case TId("function"):
-						var str = parseStructure("function"); // private function
-						nextIsPrivate = false;
-						str;
-					case TId("override"):
-						var str = parseStructure("override"); // private override
-						nextIsPrivate = false;
-						str;
-					case TId("var"):
-						var str = parseStructure("var"); // private var
-						nextIsPrivate = false;
-						str;
-					case TId("final"):
-						var str = parseStructure("final"); // private final
-						nextIsPrivate = false;
-						str;
-					case TId("class"):
-						var str = parseStructure("class"); // private class
+					case TId(_i = "static" | "function" | "override" | "var" | "final" | "class"):
+						var str = parseStructure(_i);
 						nextIsPrivate = false;
 						str;
 					default:
@@ -766,32 +686,8 @@ class Parser {
 				nextIsInline = true;
 				var nextToken = token();
 				switch(nextToken) {
-					case TId("static"):
-						var str = parseStructure("static"); // inline static
-						nextIsInline = false;
-						str;
-					case TId("function"):
-						var str = parseStructure("function"); // inline function
-						nextIsInline = false;
-						str;
-					case TId("override"):
-						var str = parseStructure("override"); // inline override
-						nextIsInline = false;
-						str;
-					case TId("var"):
-						var str = parseStructure("var"); // inline var
-						nextIsInline = false;
-						str;
-					case TId("final"):
-						var str = parseStructure("final"); // inline final
-						nextIsInline = false;
-						str;
-					case TId("class"):
-						var str = parseStructure("class"); // inline class
-						nextIsInline = false;
-						str;
-					case TId("private"): // inline private
-						var str = parseStructure("private"); // inline private
+					case TId(_i = "static" | "function" | "override" | "var" | "final" | "class" | "private"):
+						var str = parseStructure(_i);
 						nextIsInline = false;
 						str;
 					default:
@@ -803,14 +699,9 @@ class Parser {
 				if(id == "final") {
 					var nextToken = token();
 					switch(nextToken) {
-						case TId("class"):
+						case TId(_i = "class" | "function"):
 							nextIsFinal = true;
-							var str = parseStructure("class"); // final class
-							nextIsFinal = false;
-							return str;
-						case TId("function"):
-							nextIsFinal = true;
-							var str = parseStructure("function"); // final function
+							var str = parseStructure(_i); // final class | function
 							nextIsFinal = false;
 							return str;
 						default:
