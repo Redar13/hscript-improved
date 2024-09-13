@@ -56,7 +56,7 @@ enum Expr {
 #end
 	EConst( c : Const );
 	EIdent( v : String );
-	EVar( n : String, ?t : CType, ?e : Expr, ?isPublic : Bool, ?isStatic : Bool );
+	EVar( n : String, ?t : CType, ?e : Expr, ?isPublic : Bool, ?isStatic : Bool, ?isPrivate : Bool, ?isFinal : Bool, ?isInline : Bool );
 	EParent( e : Expr );
 	EBlock( e : Array<Expr> );
 	EField( e : Expr, f : String , ?safe : Bool );
@@ -68,7 +68,7 @@ enum Expr {
 	EFor( v : String, it : Expr, e : Expr, ?ithv: String);
 	EBreak;
 	EContinue;
-	EFunction( args : Array<Argument>, e : Expr, ?name : String, ?ret : CType, ?isPublic : Bool, ?isStatic : Bool, ?isOverride : Bool );
+	EFunction( args : Array<Argument>, e : Expr, ?name : String, ?ret : CType, ?isPublic : Bool, ?isStatic : Bool, ?isOverride : Bool, ?isPrivate : Bool, ?isFinal : Bool, ?isInline : Bool );
 	EReturn( ?e : Expr );
 	EArray( e : Expr, index : Expr );
 	EArrayDecl( e : Array<Expr>, ?wantedType: CType );
@@ -84,7 +84,7 @@ enum Expr {
 
 	EImport( c : String, ?asname:String );
 	EImportStar( c : String );
-	EClass( name:String, fields:Array<Expr>, ?extend:String, interfaces:Array<String> );
+	EClass( name:String, fields:Array<Expr>, ?extend:String, interfaces:Array<String>, ?isFinal:Bool, ?isPrivate:Bool );
 }
 
 @:structInit
@@ -196,8 +196,8 @@ typedef FunctionDecl = {
 }
 
 typedef VarDecl = {
-	var get : Null<String>;
-	var set : Null<String>;
+	var get : Null<String>; // TODO
+	var set : Null<String>; // TODO
 	var expr : Null<Expr>;
 	var type : Null<CType>;
 }

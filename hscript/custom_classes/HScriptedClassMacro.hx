@@ -184,13 +184,13 @@ class HScriptedClassMacro
 				ret: Context.toComplexType(Context.getType(clsTypeName)),
 				expr: macro
 				{
+					trace("do something" + '($clsName)');
 					hscript.custom_classes.PolymodScriptClass.scriptClassOverrides.set($v{superClsTypeName}, Type.resolveClass($v{clsTypeName}));
 
-					var asc:hscript.custom_classes.PolymodAbstractScriptClass = hscript.custom_classes.PolymodScriptClass.createScriptClassInstance(clsName,
-						$a{constArgs});
+					var asc:hscript.custom_classes.PolymodAbstractScriptClass = hscript.custom_classes.PolymodScriptClass.createScriptClassInstance(clsName, $a{constArgs});
 					if (asc == null)
 					{
-						polymod.Polymod.error(SCRIPT_RUNTIME_EXCEPTION, 'Could not construct instance of scripted class (${clsName} extends ' + $v{clsTypeName} + ')');
+						// polymod.Polymod.error(SCRIPT_RUNTIME_EXCEPTION, 'Could not construct instance of scripted class (${clsName} extends ' + $v{clsTypeName} + ')');
 						return null;
 					}
 					var scriptedObj = asc.superClass;
@@ -283,26 +283,8 @@ class HScriptedClassMacro
 			pos: cls.pos,
 		};
 
-		var function_listScriptClasses:Field = {
-			name: 'listScriptClasses',
-			doc: "Returns a list of all the scripted classes which extend this class.",
-			access: [APublic, AStatic],
-			meta: null,
-			pos: cls.pos,
-			kind: FFun({
-				args: [],
-				params: null,
-				ret: toComplexTypeArray(Context.toComplexType(Context.getType('String'))),
-				expr: macro
-				{
-					return hscript.custom_classes.PolymodScriptClass.listScriptClassesExtending($v{superClsTypeName});
-				},
-			}),
-		};
-
 		return [
 			var__asc,
-			function_listScriptClasses,
 			function_scriptCall,
 			function_scriptGet,
 			function_scriptSet
@@ -830,8 +812,11 @@ class HScriptedClassMacro
 								// trace('ASC: Calling $fieldName() in macro-generated function...');
 								$
 								{
-									doesReturnVoid ? (macro _asc.callFunction(fieldName,
-										[$a{func_callArgs}])) : (macro return _asc.callFunction(fieldName, [$a{func_callArgs}]))
+									doesReturnVoid ? (
+										macro _asc.callFunction(fieldName, [$a{func_callArgs}])
+									) : (
+										macro return _asc.callFunction(fieldName, [$a{func_callArgs}])
+									)
 								}
 							}
 							else
@@ -840,7 +825,11 @@ class HScriptedClassMacro
 								// trace('ASC: Fallback to original ${fieldName}');
 								$
 								{
-									doesReturnVoid ? (macro super.$funcName($a{func_callArgs})) : (macro return super.$funcName($a{func_callArgs}))
+									doesReturnVoid ? (
+										macro super.$funcName($a{func_callArgs})
+									) : (
+										macro return super.$funcName($a{func_callArgs})
+									)
 								}
 							}
 						},
@@ -863,7 +852,11 @@ class HScriptedClassMacro
 							// trace('ASC: Force call to super ${fieldName}');
 							$
 							{
-								doesReturnVoid ? (macro super.$funcName($a{func_callArgs})) : (macro return super.$funcName($a{func_callArgs}))
+								doesReturnVoid ? (
+									macro super.$funcName($a{func_callArgs})
+								) : (
+									macro return super.$funcName($a{func_callArgs})
+								)
 							}
 						},
 					}),

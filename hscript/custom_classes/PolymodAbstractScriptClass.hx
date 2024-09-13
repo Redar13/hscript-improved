@@ -7,6 +7,8 @@ abstract PolymodAbstractScriptClass(PolymodScriptClass) from PolymodScriptClass
 {
 	private function resolveField(name:String):Dynamic
 	{
+		return this.get(name);
+		/*
 		switch (name)
 		{
 			case "superClass":
@@ -18,35 +20,35 @@ abstract PolymodAbstractScriptClass(PolymodScriptClass) from PolymodScriptClass
 			case "callFunction":
 				return this.callFunction;
 			case _:
-				/*
-				if (this.findFunction(name) != null)
-				{
-					var fn = this.findFunction(name);
-					var nargs = 0;
-					if (fn.args != null)
-					{
-						nargs = fn.args.length;
-					}
-					switch (nargs)
-					{
-						case 0: return this.callFunction0.bind(name);
-						case 1: return this.callFunction1.bind(name, _);
-						case 2: return this.callFunction2.bind(name, _, _);
-						case 3: return this.callFunction3.bind(name, _, _, _);
-						case 4: return this.callFunction4.bind(name, _, _, _, _);
-						#if neko
-						case _: @:privateAccess this._interp.error(ECustom("only 4 params allowed in script class functions (.bind limitation)"));
-						#else
-						case 5: return this.callFunction5.bind(name, _, _, _, _, _);
-						case 6: return this.callFunction6.bind(name, _, _, _, _, _, _);
-						case 7: return this.callFunction7.bind(name, _, _, _, _, _, _, _);
-						case 8: return this.callFunction8.bind(name, _, _, _, _, _, _, _, _);
-						case _: @:privateAccess this._interp.error(ECustom("only 8 params allowed in script class functions (.bind limitation)"));
-						#end
-					}
-				}
-				else
-				*/
+
+				// if (this.findFunction(name) != null)
+				// {
+				// 	var fn = this.findFunction(name);
+				// 	var nargs = 0;
+				// 	if (fn.args != null)
+				// 	{
+				// 		nargs = fn.args.length;
+				// 	}
+				// 	switch (nargs)
+				// 	{
+				// 		case 0: return this.callFunction0.bind(name);
+				// 		case 1: return this.callFunction1.bind(name, _);
+				// 		case 2: return this.callFunction2.bind(name, _, _);
+				// 		case 3: return this.callFunction3.bind(name, _, _, _);
+				// 		case 4: return this.callFunction4.bind(name, _, _, _, _);
+				// 		#if neko
+				// 		case _: @:privateAccess this._interp.error(ECustom("only 4 params allowed in script class functions (.bind limitation)"));
+				// 		#else
+				// 		case 5: return this.callFunction5.bind(name, _, _, _, _, _);
+				// 		case 6: return this.callFunction6.bind(name, _, _, _, _, _, _);
+				// 		case 7: return this.callFunction7.bind(name, _, _, _, _, _, _, _);
+				// 		case 8: return this.callFunction8.bind(name, _, _, _, _, _, _, _, _);
+				// 		case _: @:privateAccess this._interp.error(ECustom("only 8 params allowed in script class functions (.bind limitation)"));
+				// 		#end
+				// 	}
+				// }
+				// else
+
 				var v = this.findVar(name);
 				if (v != null)
 				{
@@ -106,6 +108,7 @@ abstract PolymodAbstractScriptClass(PolymodScriptClass) from PolymodScriptClass
 			throw "field '" + name + "' does not exist in script class '" + this.className + "' or super class '"
 				+ Type.getClassName(Type.getClass(this.superClass)) + "'";
 		}
+		*/
 	}
 
 	@:op(a.b) public function fieldRead(name:String):Dynamic
