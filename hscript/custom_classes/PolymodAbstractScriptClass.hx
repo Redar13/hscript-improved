@@ -5,6 +5,10 @@ package hscript.custom_classes;
 @:allow(hscript.Interp)
 abstract PolymodAbstractScriptClass(PolymodScriptClass) from PolymodScriptClass
 {
+	public function callFunction(f:String, ?args:Array<Dynamic>):Dynamic
+	{
+		return this.callFunction(f, args);
+	}
 	private function resolveField(name:String):Dynamic
 	{
 		return this.get(name);

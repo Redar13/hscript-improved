@@ -10,15 +10,18 @@ import haxe.macro.Type.FieldKind;
 import haxe.macro.Type.ClassField;
 import haxe.macro.Type.VarAccess;
 import haxe.macro.*;
+import hscript.custom_classes.HScriptedClassMacro;
 import Sys;
 
 using StringTools;
+using Lambda;
 
+@:access(hscript.custom_classes.HScriptedClassMacro)
 class ClassExtendMacro {
 	public static inline final FUNC_PREFIX = "_HX_SUPER__";
 	public static inline final CLASS_SUFFIX = "_HSX";
 
-	public static var unallowedMetas:Array<String> = [":bitmap", ":noCustomClass", ":generic"];
+	public static var unallowedMetas:Array<String> = [":hscriptClassPreProcessed", ":structInit", ":bitmap", ":noCustomClass", ":generic"];
 
 	public static var modifiedClasses:Array<String> = [];
 
@@ -36,23 +39,38 @@ class ClassExtendMacro {
 	public static function build():Array<Field> {
 		var fields = Context.getBuildFields();
 		var clRef = Context.getLocalClass();
-		if (clRef == null) return fields;
+		if (clRef == null || fields.length == 0) return fields;
 		var cl = clRef.get();
 
 		if (cl.isAbstract || cl.isExtern || cl.isFinal || cl.isInterface) return fields;
 		if (!cl.name.endsWith("_Impl_") && !cl.name.endsWith(CLASS_SUFFIX) && !cl.name.endsWith("_HSC")) {
+			if(cl.params.length > 0)
+				return fields;
+
 			var metas = cl.meta.get();
 			for(m in metas)
 				if (unallowedMetas.contains(m.name))
 					return fields;
 
-			if(cl.params.length > 0)
-				return fields;
-
 			var key = cl.module;
 			var fkey = cl.module + "." + cl.name;
 
-			var shadowClass = macro class { };
+			for (i in Config.DISALLOW_CUSTOM_CLASSES)
+				if(fkey.startsWith(i) || key.startsWith(i))
+					return fields;
+
+			var _tempCl = cl;
+			// trace(_tempCl.fields.get());
+			var isNotStaticModule = _tempCl.constructor != null && _tempCl.fields.get().length > 0;
+			while (!isNotStaticModule && _tempCl.superClass != null)
+			{
+				_tempCl = _tempCl.superClass.t.get();
+				isNotStaticModule = _tempCl.constructor != null && _tempCl.fields.get().length > 0;
+			}
+			if(!isNotStaticModule || cl.params.length > 0) // doesn't compile static module or class with only static fields
+				return fields;
+
+			var shadowClass:TypeDefinition = macro class { };
 			shadowClass.kind = TDClass({
 				pack: cl.pack.copy(),
 				name: cl.name
@@ -60,14 +78,32 @@ class ClassExtendMacro {
 				{name: "HScriptedClass", pack: ["hscript"]}
 			], false, true, false);
 			shadowClass.name = '${cl.name}$CLASS_SUFFIX';
-			/*
+			shadowClass.meta = [
+								{name: ":hscriptClass", pos: Context.currentPos()},
+								{name: ":access", params: [macro ""], pos: Context.currentPos()}
+							];
 			var imports = Context.getLocalImports().copy();
 			Utils.setupMetas(shadowClass, imports);
+			/*
+			for(e in cl.params) {
+				shadowClass.fields.push({
+					pos: Context.currentPos(),
+					name: e.name,
+					kind: FVar(null, Context.parseInlineString('@:privateAccess (${e.name})', Context.currentPos())),
+					access: [APrivate]
+				});
+			}
 			*/
 
-			Context.defineModule(cl.module, [shadowClass]/*, imports*/);
-			/*
+			// trace(key);
+			// trace(" " + fkey);
+			Context.defineModule(cl.module, [shadowClass], imports);
 
+			// trace(shadowClass.pack.join(".") + "." + shadowClass.name);
+			// trace(cl.module + "." + shadowClass.name);
+			// Compiler.addGlobalMetadata(cl.module + "." + shadowClass.name, "@:autoBuild(hscript.custom_classes.HScriptedClassMacro.build())");
+
+			/*
 			var key = cl.module;
 			var fkey = cl.module + "." + cl.name;
 			switch (key)

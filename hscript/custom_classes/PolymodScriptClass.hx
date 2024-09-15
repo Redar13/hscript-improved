@@ -1,6 +1,6 @@
 package hscript.custom_classes;
 
-#if hscript
+import hscript.custom_classes.PolymodAbstractScriptClass;
 import hscript.custom_classes.PolymodClassDeclEx;
 import hscript.Expr;
 import hscript.Printer;
@@ -16,9 +16,7 @@ enum Param
 
 /**
  * Grabbed from polymod (https://github.com/larsiusprime/polymod/tree/master/polymod/hscript)
- */
-
-/**
+ *
  * Provides handlers for scripted classes
  * Based on code by Ian Harrigan
  * @see https://github.com/ianharrigan/hscript-ex
@@ -44,15 +42,24 @@ class PolymodScriptClass
 	 */
 	public static final defaultImports:Map<String, Class<Dynamic>> = new Map<String, Class<Dynamic>>();
 
-	public inline static function createScriptClassInstance(name:String, args:Array<Dynamic> = null):PolymodAbstractScriptClass
+	public inline static function createScriptClassInstance(clsName:String, interp:Interp):PolymodAbstractScriptClass
 	{
-		// return Interp.createScriptClassInstance(name, args);
-		return null;
+		return interp.createScriptClassInstance(clsName);
 	}
 
+	public var name:String;
+	public var extend:String;
+	public var cl:Class<Dynamic>;
 	/**
 	 * INSTANCE METHODS
 	 */
+	public function new(ogInterp:Interp, name:String, fields:Array<Expr>, ?extend:String, ?interfaces:Array<String>)
+	{
+		this.name = name;
+		_parentInterp = ogInterp;
+		this.cl = extend == null ? TemplateClass : Type.resolveClass('${extend}_HSX');
+	}
+	/*
 	public function new(c:ClassDeclEx, args:Array<Dynamic>, ?parentInterp:Interp)
 	{
 		var targetClass:Class<Dynamic> = null;
@@ -78,7 +85,16 @@ class PolymodScriptClass
 		_interp._proxy = this;
 		_c = c;
 		_parentInterp = parentInterp;
-		buildCaches();
+	}
+	*/
+
+	public function callNew(?args:Array<Dynamic>)
+	{
+		_interp = new Interp(superClass);
+		_interp._proxy = this;
+		// _c = c;
+		_interp.errorHandler = _parentInterp.errorHandler;
+		// buildCaches();
 
 		if (findField("new") != null)
 		{
@@ -90,10 +106,11 @@ class PolymodScriptClass
 			}
 			*/
 		}
-		else if (_c.extend != null)
+		else
 		{
 			createSuperClass(args);
 		}
+		return superClass;
 	}
 
 	var __superClassFieldList:Array<String> = null;
@@ -116,47 +133,25 @@ class PolymodScriptClass
 		{
 			args = [];
 		}
-
-		var fullExtendString = new hscript.Printer().typeToString(_c.extend);
-
-		// Templates are ignored completely since there's no type checking in HScript.
-		if (fullExtendString.indexOf('<') != -1)
+		if (extend == null)
 		{
-			fullExtendString = fullExtendString.split('<')[0];
+			superClass = Type.createInstance(cl, args);
+			return;
 		}
+
+		var fullExtendString = '${extend}_HSX';
 
 		// Build an unqualified path too.
-		var fullExtendStringParts = fullExtendString.split('.');
-		var extendString = fullExtendStringParts[fullExtendStringParts.length - 1];
+		var extendString = fullExtendString.substr(fullExtendString.lastIndexOf(".") + 1);
 
-		var classDescriptor = _interp.findScriptClassDescriptor(extendString);
-		if (classDescriptor != null)
+		// var classDescriptor = _interp.findScriptClassDescriptor(extendString);
+		// if (classDescriptor != null)
+		// {
+		// 	superClass = new PolymodScriptClass(classDescriptor, args);
+		// }
+		// else
 		{
-			superClass = new PolymodScriptClass(classDescriptor, args);
-		}
-		else
-		{
-			var clsToCreate:Class<Dynamic> = null;
-
-			if (scriptClassOverrides.exists(fullExtendString)) {
-				clsToCreate = scriptClassOverrides.get(fullExtendString);
-
-				if (clsToCreate == null)
-				{
-					// @:privateAccess _interp.errorEx(EClassUnresolvedSuperclass(fullExtendString, 'WHY?'));
-				}
-			} else if (_c.imports.exists(extendString)) {
-				clsToCreate = _c.imports.get(extendString).cls;
-
-				if (clsToCreate == null)
-				{
-					// _interp.errorEx(EClassUnresolvedSuperclass(extendString, 'target class blacklisted'));
-				}
-			} else {
-				// _interp.errorEx(EClassUnresolvedSuperclass(extendString, 'missing import'));
-			}
-
-			superClass = Type.createInstance(clsToCreate, args);
+			superClass = Type.createInstance(cl, args);
 		}
 	}
 
@@ -164,9 +159,7 @@ class PolymodScriptClass
 	public function callFunction(fnName:String, args:Array<Dynamic> = null):Dynamic
 	{
 		var func = get(fnName);
-		if (UnsafeReflect.isFunction(func))
-			return _interp.call(null, func, args);
-		return null;
+		return UnsafeReflect.isFunction(func) ? _interp.call(null, func, args) : null;
 		/*
 		var field = findField(fnName);
 		var r:Dynamic = null;
@@ -479,4 +472,11 @@ class PolymodScriptClass
 		}
 	}
 }
-#end
+
+
+class TemplateClassBase {
+	public function new() { }
+	public function toString() return "";
+}
+@:hscriptClass
+class TemplateClass extends TemplateClassBase implements hscript.HScriptedClass { } // TODO: Allow made hscriptedClass for non extenden class

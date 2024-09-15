@@ -39,6 +39,7 @@ import hscript.custom_classes.PolymodClassDeclEx;
 import hscript.custom_classes.PolymodScriptClass;
 import hscript.macros.ClassTools;
 import hscript.Expr;
+import hscript.HScriptedClass;
 import hscript.UnsafeReflect;
 
 using StringTools;
@@ -71,6 +72,7 @@ private enum Stop {
 	SReturn;
 }
 
+@:access(hscript.HScriptedClass)
 class Interp {
 	public var scriptObject(default, set):Dynamic;
 	private var _hasScriptObject(default, null):Bool = false;
@@ -247,6 +249,38 @@ class Interp {
 		assignOp(">>=", function(v1, v2) return v1 >> v2);
 		assignOp(">>>=", function(v1, v2) return v1 >>> v2);
 		assignOp("??" + "=", function(v1, v2) return v1 == null ? v2 : v1);
+	}
+
+	function filterExprByType(expr:Dynamic, type:CType):Dynamic
+	{
+		return switch(type)
+		{
+			case CTPath(_[0] => strType):
+				switch (strType)
+				{
+					case "Array" if (Std.isOfType(expr, Array)):
+						expr;
+					case "Class" if (Std.isOfType(expr, Class)):
+						expr;
+					case ("Map" | "IMap") if (Std.isOfType(expr, IMap)):
+						expr;
+					// case StringTools.trim(_).length == 0:
+					// 	expr;
+					default:
+						var exprType = resolve(strType);
+						expr = exprType != null && Std.isOfType(expr, exprType) ? expr : null;
+						trace(strType);
+						// if (expr == null)
+						// 	error(EUnexpected(strType));
+						expr;
+				}
+			default:
+			/*
+				var exprType:Dynamic = expr(e2);
+				exprType != null && Std.isOfType(expr, exprType) ? expr : null;
+			*/
+				null;
+		}
 	}
 
 	function checkIsType(e1,e2): Bool {
@@ -636,8 +670,8 @@ class Interp {
 			return publicVariables.get(id);
 		if (staticVariables.exists(id))
 			return staticVariables.get(id);
-		if (customClasses.exists(id))
-			return customClasses.get(id);
+		// if (customClasses.exists(id))
+		// 	return customClasses.get(id);
 
 		if (_hasScriptObject) {
 			// search in object
@@ -711,77 +745,20 @@ class Interp {
 		var e = e.e;
 		#end
 		switch (e) {
-			case EClass(name, fields, extend, interfaces):
-				if (extend != null)
-				{
-					var superClassPath = extend;
-					/*
-					if (!imports.exists(superClassPath)) {
-						switch (extend) {
-							case CTPath(path, params):
-								if (params.length > 0) {
-									errorEx(EClassUnresolvedSuperclass(superClassPath, 'do not include type parameters in super class name'));
-								}
-							default:
-								// Other error handling?
-						}
-						// Default
-						errorEx(EClassUnresolvedSuperclass(superClassPath, 'not recognized, is the type imported?'));
-					}
-					*/
-
-					/*
-					var extendImport = imports.get(superClassPath);
-					if (extendImport != null)
-					{
-						if (extendImport.cls == null)
-							errorEx(EClassUnresolvedSuperclass(superClassPath, 'expected a class'));
-
-						switch (extend)
-						{
-							case CTPath(_, params):
-								extend = CTPath(imports.get(superClassPath).fullPath.split('.'), params);
-							case _:
-						}
-					}
-					*/
-				}
-				/*
+			case EClass(name, _):
 				if (customClasses.exists(name))
 					error(EAlreadyExistingClass(name));
 
-				inline function importVar(thing:String):String {
-					if (thing == null)
-						return null;
-					final variable:Class<Any> = customClasses.exists(thing) ? null : resolve(thing, false);
-					return variable == null ? thing : Type.getClassName(variable);
-				}
-				var classDecl:ClassDeclEx = {
-					imports: [],
-					pkg: null,
-					name: name,
-					params: null,
-					meta: null,
-					isPrivate: false,
-					extend: extend,
-					implement: null,
-					fields: fields,
-					isExtern: false
-				}
-				registerScriptClass(classDecl);
-				*/
 				/*
-				if (customClasses.exists(name))
-					error(EAlreadyExistingClass(name));
-
-				inline function importVar(thing:String):String {
+				function importVar(thing:String):String {
 					if (thing == null)
 						return null;
-					final variable:Class<Any> = customClasses.exists(thing) ? null : resolve(thing, false);
+					final variable:Class<Dynamic> = customClasses.exists(thing) ? null : resolve(thing, false);
 					return variable == null ? thing : Type.getClassName(variable);
 				}
-				customClasses.set(name, new CustomClassHandler(this, name, fields, importVar(extend), [for (i in interfaces) importVar(i)]));
+				customClasses.set(name, new PolymodScriptClass(this, name, fields, importVar(extend), [for (i in interfaces) importVar(i)]));
 				*/
+				customClasses.set(name, e);
 			case EImportStar(pkg):
 				#if !macro
 				if (!importEnabled)
@@ -917,9 +894,20 @@ class Interp {
 				}
 			case EIdent(id):
 				return resolve(id);
-			case EVar(n, _, e, isPublic, isStatic):
+			case EVar(n, type, e, isPublic, isStatic):
 				declared.push({n: n, old: locals.get(n), depth: depth});
-				locals.set(n, {r: (e == null) ? null : expr(e), depth: depth});
+				var initExpr:Dynamic = null;
+				if (e != null)
+				{
+					initExpr = expr(e);
+					/*
+					if (type != null)
+					{
+						initExpr = filterExprByType(initExpr, type);
+					}
+					*/
+				}
+				locals.set(n, {r: initExpr, depth: depth});
 				if (depth == 0) {
 					if(isStatic == true) {
 						if(!staticVariables.exists(n)) {
@@ -1242,137 +1230,6 @@ class Interp {
 		restore(old);
 	}
 
-	public function addModule(moduleContents:String, ?origin:String = "hscript")
-	{
-		static var parser = new hscript.Parser();
-		var decls = parser.parseModule(moduleContents, origin);
-		registerModule(decls, origin);
-	}
-
-	public function createScriptClassInstance(className:String, args:Array<Dynamic> =null):PolymodScriptClass
-	{
-		if (_scriptClassDescriptors.exists(className))
-		{
-			if (args == null)
-			{
-				args = [];
-			}
-			// OVERRIDE CHANGE: Create a PolymodScriptClass instead of a hscript.ScriptClass
-			return new PolymodScriptClass(_scriptClassDescriptors.get(className), args);
-		}
-		return null;
-	}
-	public function registerModule(module:Array<ModuleDecl>, ?origin:String = "hscript")
-	{
-		var pkg:Array<String> = null;
-		var imports:Map<String, ClassImport> = [];
-
-		/*
-		for (importPath in PolymodScriptClass.defaultImports.keys())
-		{
-			var splitPath = importPath.split(".");
-			var clsName = splitPath[splitPath.length - 1];
-
-			imports.set(clsName, {
-				name: clsName,
-				pkg: splitPath.slice(0, splitPath.length - 1),
-				fullPath: importPath,
-				cls: PolymodScriptClass.defaultImports.get(importPath),
-			});
-		}
-		*/
-
-		for (decl in module)
-		{
-			switch (decl)
-			{
-				case DPackage(path):
-					pkg = path;
-				case DImport(path, _):
-					var clsName = path[path.length - 1];
-
-					if (imports.exists(clsName))
-					{
-						continue;
-					}
-
-					var importedClass:ClassImport = {
-						name: clsName,
-						pkg: path.slice(0, path.length - 1),
-						fullPath: path.join("."),
-						cls: null,
-						enm: null
-					};
-
-					if (PolymodScriptClass.importOverrides.exists(importedClass.fullPath)) {
-						// importOverrides can exist but be null (if it was set to null).
-						// If so, that means the class is blacklisted.
-
-						importedClass.cls = PolymodScriptClass.importOverrides.get(importedClass.fullPath);
-					} else {
-						var result:Class<Dynamic> = cast resolve(importedClass.fullPath);
-
-						// If the class is not found, try to find it as an enum.
-						// If the class is still not found, skip this import entirely.
-						if (result == null) {
-							continue;
-						} else if (result != null) {
-							importedClass.cls = result;
-						}
-					}
-
-					imports.set(importedClass.name, importedClass);
-				case DClass(c):
-					var extend = c.extend;
-					if (extend != null)
-					{
-						static var staticPrinter = new hscript.Printer();
-						var superClassPath = staticPrinter.typeToString(extend);
-						if (!imports.exists(superClassPath)) {
-							// switch (extend) {
-							// 	case CTPath(path, params):
-							// 		if (params.length > 0) {
-							// 			errorEx(EClassUnresolvedSuperclass(superClassPath, 'do not include type parameters in super class name'));
-							// 		}
-							// 	default:
-							// 		// Other error handling?
-							// }
-							// // Default
-							// errorEx(EClassUnresolvedSuperclass(superClassPath, 'not recognized, is the type imported?'));
-							// errorEx(EClassUnresolvedSuperclass(superClassPath, 'not recognized, is the type imported?'));
-						}
-
-						if (imports.exists(superClassPath))
-						{
-							var extendImport = imports.get(superClassPath);
-							// if (extendImport.cls == null)
-							// 	errorEx(EClassUnresolvedSuperclass(superClassPath, 'expected a class'));
-
-							switch (extend)
-							{
-								case CTPath(_, params):
-									extend = CTPath(imports.get(superClassPath).fullPath.split('.'), params);
-								case _:
-							}
-						}
-					}
-					var classDecl:ClassDeclEx = {
-						imports: imports,
-						pkg: pkg,
-						name: c.name,
-						params: c.params,
-						meta: c.meta,
-						isPrivate: c.isPrivate,
-						extend: extend,
-						implement: c.implement,
-						fields: c.fields,
-						isExtern: c.isExtern
-					}
-					registerScriptClass(classDecl);
-				case DTypedef(_):
-			}
-		}
-	}
 	private function registerScriptClass(c:ClassDeclEx)
 	{
 		var name = c.name;
@@ -1503,8 +1360,8 @@ class Interp {
 		}) {
 			return _getRedirect(o, f);
 		}
-		if (o is PolymodScriptClass) {
-			var proxy:PolymodAbstractScriptClass = cast(o, PolymodScriptClass);
+		if (o is HScriptedClass) {
+			var proxy:PolymodAbstractScriptClass = Reflect.field(o, "_asc");
 			if (proxy._interp.variables.exists(f))
 			{
 				return proxy._interp.variables.get(f);
@@ -1544,9 +1401,9 @@ class Interp {
 			cl != null && setRedirects.exists(cl) && (_setRedirect = setRedirects[cl]) != null;
 		})
 			return _setRedirect(o, f, v);
-		if (o is PolymodScriptClass)
+		if (o is HScriptedClass)
 		{
-			var proxy:PolymodScriptClass = cast(o, PolymodScriptClass);
+			var proxy:PolymodAbstractScriptClass = Reflect.field(o, "_asc");
 			if (proxy._interp.variables.exists(f))
 			{
 				proxy._interp.variables.set(f, v);
@@ -1575,9 +1432,9 @@ class Interp {
 			// Force call super function.
 			return call(o, get(o, '__super_${f}'), args);
 		}
-		else if (Std.isOfType(o, PolymodScriptClass))
+		else if (Std.isOfType(o, HScriptedClass))
 		{
-			return cast(o, PolymodScriptClass).callFunction(f, args);
+			return Reflect.field(o, "_asc").callFunction(f, args);
 		}
 
 		var func = get(o, f);
@@ -1631,10 +1488,52 @@ class Interp {
 	}
 
 	function cnew(cl:String, args:Array<Dynamic>):Dynamic {
-		var cl:String = cast cl;
-		var c:Dynamic = resolve(cl);
-		if (c == null)
-			c = Type.resolveClass(cl);
-		return Type.createInstance(c, args);
+		switch (customClasses.get(cl))
+		{
+			case EClass(_, fields, extend, interfaces):
+				try
+				{
+					function importVar(thing:String):String
+					{
+						if (thing == null)
+							return "hscript.TemplateClass";
+						final variable:Class<Dynamic> = customClasses.exists(thing) ? null : resolve(thing, false);
+						return variable == null ? thing : Type.getClassName(variable);
+					}
+					var scriptedCls:Dynamic = importVar(extend);
+					if (scriptedCls == null || (scriptedCls = Type.resolveClass(scriptedCls + "_HSX")) == null)
+						return null;
+					return Reflect.field(scriptedCls, "__hsx_init")(cl, args).callNew(args);
+				}
+				catch(e)
+				{
+					trace(e.details());
+					return null;
+				}
+
+			default:
+				return Type.createInstance(resolve(cl), args);
+		}
 	}
+	public function createScriptClassInstance(className:String):PolymodAbstractScriptClass
+	{
+		switch (customClasses.get(className))
+		{
+			case EClass(_, fields, extend, interfaces):
+				function importVar(thing:String):String
+				{
+					if (thing == null)
+						return null;
+					final variable:Class<Dynamic> = customClasses.exists(thing) ? null : resolve(thing, false);
+					return variable == null ? thing : Type.getClassName(variable);
+				}
+				return new PolymodScriptClass(
+							this, className, fields, importVar(extend),
+							[for (i in interfaces) importVar(i)]
+						);
+			default:
+				return null;
+		}
+	}
+
 }

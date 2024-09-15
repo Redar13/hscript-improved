@@ -1207,18 +1207,18 @@ class Parser {
 								params.push(parseType());
 								t = token();
 								switch( t ) {
-								case TComma: continue;
-								case TOp(op):
-									if( op == ">" ) break;
-									if( op.charCodeAt(0) == ">".code ) {
-										#if hscriptPos
-										tokens.add({ t : TOp(op.substr(1)), min : tokenMax - op.length - 1, max :tokenMax });
-										#else
-										tokens.add(TOp(op.substr(1)));
-										#end
-										break;
-									}
-								default:
+									case TComma: continue;
+									case TOp(op):
+										if( op == ">" ) break;
+										if( op.charCodeAt(0) == ">".code ) {
+											#if hscriptPos
+											tokens.add({ t : TOp(op.substr(1)), min : tokenMax - op.length - 1, max :tokenMax });
+											#else
+											tokens.add(TOp(op.substr(1)));
+											#end
+											break;
+										}
+									default:
 								}
 								unexpected(t);
 								break;
@@ -1247,7 +1247,6 @@ class Parser {
 
 				switch [a, b] {
 					case [TPClose, _] | [TId(_), TDoubleDot]:
-
 						var args = [for (arg in parseFunctionArgs()) {
 							switch arg.value {
 								case null:
@@ -1260,7 +1259,6 @@ class Parser {
 
 						return withReturn(args);
 					default:
-
 						var t = parseType();
 						return switch token() {
 							case TComma:
@@ -1303,9 +1301,9 @@ class Parser {
 							fields.push( { name : name, t : parseType(), meta : meta } );
 							t = token();
 							switch( t ) {
-							case TComma:
-							case TBrClose: break;
-							default: unexpected(t);
+								case TComma:
+								case TBrClose: break;
+								default: unexpected(t);
 							}
 						case TMeta(name):
 							if( meta == null ) meta = [];
@@ -1332,9 +1330,9 @@ class Parser {
 			default:
 				push(tk);
 				return t;
-			}
-			var t2 = parseType();
-			switch( t2 ) {
+		}
+		var t2 = parseType();
+		switch( t2 ) {
 			case CTFun(args, _):
 				args.unshift(t);
 				return t2;
