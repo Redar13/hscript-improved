@@ -28,6 +28,7 @@
  */
 package hscript;
 
+import haxe.Constraints.Function;
 import haxe.display.Protocol.InitializeResult;
 import haxe.iterators.StringKeyValueIteratorUnicode;
 import haxe.EnumTools;
@@ -51,6 +52,19 @@ enum abstract ScriptObjectType(UInt8) {
 	var SCustomClass;
 	var SBehaviourClass;
 	var SNull;
+	@:to
+	function toString():String
+	{
+		return switch (cast this)
+		{
+			case SClass: 			"SClass";
+			case SObject: 			"SObject";
+			case SStaticClass: 		"SStaticClass";
+			case SCustomClass: 		"SCustomClass";
+			case SBehaviourClass: 	"SBehaviourClass";
+			default: 				"SNull";
+		}
+	}
 }
 
 @:structInit
@@ -78,34 +92,51 @@ class Interp {
 	private var _hasScriptObject(default, null):Bool = false;
 	private var _scriptObjectType(default, null):ScriptObjectType = SNull;
 	public function set_scriptObject(v:Dynamic) {
-		switch(Type.typeof(v)) {
-			case TClass(c): // Class Access
-				__instanceFields = Type.getInstanceFields(c);
-				if(c is HScriptedClass) {
-					// var v = cast(v, HScriptedClass);
-					// var classFields = v.__class__fields;
-					// if(classFields != null)
-					// 	__instanceFields = __instanceFields.concat(classFields);
-					_scriptObjectType = SCustomClass;
-				} else if(c is IHScriptCustomBehaviour) {
-					_scriptObjectType = SBehaviourClass;
-				} else {
-					_scriptObjectType = SClass;
-				}
-			case TObject: // Object Access or Static Class Access
-				var cls = Type.getClass(v);
-				switch(Type.typeof(cls)) {
-					case TClass(c): // Static Class Access
-						__instanceFields = Type.getInstanceFields(c);
-						_scriptObjectType = SStaticClass;
-					default: // Object Access
-						__instanceFields = Reflect.fields(v);
-						_scriptObjectType = SObject;
-				}
-			default: // Null or other
-				__instanceFields = [];
-				_scriptObjectType = SNull;
+		if(Std.isOfType(v, HScriptedClass)) {
+			// __instanceFields = Type.getInstanceFields(Type.getClass(v));
+			__instanceFields = Type.getInstanceFields(Type.getClass(v)).filter(str -> return str.indexOf("__hsx_super_") != 0);
+			// __instanceFields = Type.getInstanceFields(Reflect.field(cast(v, HScriptedClass), "_asc."))
+			// var v = cast(v, HScriptedClass);
+			// var classFields = v.__class__fields;
+			// if(classFields != null)
+			// 	__instanceFields = __instanceFields.concat(classFields);
+			_scriptObjectType = SCustomClass;
+		} else {
+			switch(Type.typeof(v)) {
+				case TClass(c): // Class Access
+					__instanceFields = Type.getInstanceFields(c);
+					if(Std.isOfType(c, IHScriptCustomBehaviour)) {
+						_scriptObjectType = SBehaviourClass;
+					} else {
+						_scriptObjectType = SClass;
+					}
+				case TObject: // Object Access or Static Class Access
+					var cls = Type.getClass(v);
+					switch(Type.typeof(cls)) {
+						case TClass(c): // Static Class Access
+							if(Std.isOfType(c, HScriptedClass)) {
+								__instanceFields = Type.getInstanceFields(c).filter(str -> return str.indexOf("__hsx_super_") != 0);
+								// __instanceFields = Type.getInstanceFields(Reflect.field(cast(v, HScriptedClass), "_asc."))
+								// var v = cast(v, HScriptedClass);
+								// var classFields = v.__class__fields;
+								// if(classFields != null)
+								// 	__instanceFields = __instanceFields.concat(classFields);
+								_scriptObjectType = SCustomClass;
+							} else {
+								__instanceFields = Type.getInstanceFields(c);
+								_scriptObjectType = SStaticClass;
+							}
+						default: // Object Access
+							__instanceFields = Reflect.fields(v);
+							_scriptObjectType = SObject;
+					}
+				default: // Null or other
+					__instanceFields = [];
+					_scriptObjectType = SNull;
+			}
 		}
+		//trace(__instanceFields);
+		//trace(_scriptObjectType);
 		_hasScriptObject = v != null;
 		return scriptObject = v;
 	}
@@ -151,7 +182,7 @@ class Interp {
 	var curExpr:Expr;
 	#end
 
-	var _proxy:PolymodScriptClass = null;
+	var _proxy:PolymodAbstractScriptClass = null;
 
 	public function new(?targetObj:Dynamic) {
 		#if haxe3
@@ -355,7 +386,9 @@ class Interp {
 		var v = expr(e2);
 		switch (Tools.expr(e1)) {
 			case EIdent(id):
-				if (!locals.exists(id)) {
+				if (_proxy != null && _proxy.superClass != null && _proxy.superHasField(id)){
+					Reflect.setProperty(_proxy.superClass, id, v);
+				}else if (!locals.exists(id)) {
 					if (_hasScriptObject && !varExists(id)) {
 						var instanceHasField = __instanceFields.contains(id);
 
@@ -405,6 +438,17 @@ class Interp {
 				}
 				// TODO
 			case EField(e, f, s):
+				switch (Tools.expr(e))
+				{
+					case EIdent(f):
+						if (f == "this" && _proxy != null && _proxy.superClass != null && _proxy.superHasField(f))
+						{
+							Reflect.setProperty(_proxy.superClass, f, v);
+							return v;
+						}
+					default:
+						// Do nothing
+				}
 				var obj = expr(e);
 				if(s && obj == null) return null;
 				v = set(obj, f, v);
@@ -648,17 +692,12 @@ class Interp {
 	public function resolve(id:String, doException:Bool = true, resolveClass:Bool = true):Dynamic {
 		switch id
 		{
-			case null | "null" | "_": return null;
-			case "this" if (_proxy != null): return _proxy;
+			case null | "null" /*| "_"*/: return null;
 			case "super" if (_proxy != null):
 				if (_proxy.superClass == null)
-				{
 					return _proxy.superConstructor;
-				}
 				else
-				{
-					return _proxy.superClass;
-				}
+					return scriptObject;
 		}
 		id = StringTools.trim(id);
 		if (locals.exists(id))
@@ -682,19 +721,41 @@ class Interp {
 
 			if (_scriptObjectType == SObject && instanceHasField) {
 				return UnsafeReflect.field(scriptObject, id);
-			}
-			/*
-			else if(_scriptObjectType == SCustomClass && instanceHasField) {
-				var obj = cast(scriptObject, IHScriptCustomClassBehaviour);
-				if(isBypassAccessor) {
-					obj.__allowSetGet = false;
-					var res = obj.hget(id);
-					obj.__allowSetGet = true;
-					return res;
+			}else if(_scriptObjectType == SCustomClass) {
+				// We are calling a LOCAL function from the same module.
+				if (_proxy != null)
+				{
+					if (_proxy.findFunction(id, true) != null)
+					{
+						// _nextCallObject = _proxy;
+						return _proxy.get(id);
+					}
+					else if (_proxy.superHasField(id))
+					{
+						// _nextCallObject = _proxy.superClass;
+						return Reflect.getProperty(_proxy.superClass, id);
+					}
+					else
+					{
+						var r = _proxy.get(id);
+						// _nextCallObject = _proxy;
+						return r;
+					}
+					// var v = _proxy.get(id);
+					// if (v != null)
+					// {
+					// 	return v;
+					// }
+					// if (_proxy.superHasField(id))
+					// {
+					// 	return Reflect.getProperty(_proxy.superClass, "__hsx_super_" + id);
+					// }
+					// if (__instanceFields.contains("__hsx_super_" + id))
+					// {
+					// 	return UnsafeReflect.field(scriptObject, "__hsx_super_" + id);
+					// }
 				}
-				return obj.hget(id);
 			}
-			*/
 			else if(_scriptObjectType == SBehaviourClass) {
 				return cast(scriptObject, IHScriptCustomBehaviour).hget(id);
 			}
@@ -721,19 +782,6 @@ class Interp {
 			}
 		}
 
-		// We are calling a LOCAL function from the same module.
-		if (_proxy != null)
-		{
-			var v = _proxy.get(id);
-			if (v != null)
-			{
-				return v;
-			}
-			if (_proxy.superHasField(id))
-			{
-				return Reflect.getProperty(_proxy.superClass, id);
-			}
-		}
 		if (doException)
 			error(EUnknownVariable(id));
 		return null;
@@ -1350,6 +1398,7 @@ class Interp {
 				cls != null ? Type.getClassName(cls) : null;
 		}
 	}
+
 	function get(o:Dynamic, f:String):Dynamic {
 		if (o == null)
 			error(EInvalidAccess(f));
@@ -1360,8 +1409,10 @@ class Interp {
 		}) {
 			return _getRedirect(o, f);
 		}
-		if (o is HScriptedClass) {
-			var proxy:PolymodAbstractScriptClass = Reflect.field(o, "_asc");
+		var v = null;
+		if (Std.isOfType(o, PolymodScriptClass))
+		{
+			var proxy:PolymodAbstractScriptClass = cast(o, PolymodScriptClass);
 			if (proxy._interp.variables.exists(f))
 			{
 				return proxy._interp.variables.get(f);
@@ -1372,18 +1423,27 @@ class Interp {
 			}
 			else
 			{
-				try
-				{
-					return proxy.resolveField(f);
-				}
-				catch (e:Dynamic)
-				{
-				}
-				// errorEx(EUnknownVariable(f));
+				return proxy.resolveField(f);
 			}
 		}
-		var v = null;
-		if(isBypassAccessor && (v = Reflect.field(o, f)) == null){
+		else if (Std.isOfType(o, HScriptedClass))
+		{
+			// I guess there's no way to distinguish between properties thatdon't exist,
+			// and properties that are equal to null?
+			return Reflect.getProperty(o, f);
+		}
+		// if (o is HScriptedClass && o != scriptObject) {
+		// 	var proxy:PolymodAbstractScriptClass = Reflect.field(o, "_asc");
+		// 	if (proxy._interp.variables.exists(f))
+		// 	{
+		// 		return proxy._interp.variables.get(f);
+		// 	}
+		// 	else if (proxy.superClass != null && proxy.superHasField(f))
+		// 	{
+		// 		return Reflect.getProperty(proxy.superClass, f);
+		// 	}
+		// }
+		if(isBypassAccessor && v == null && (v = Reflect.field(o, f)) == null){
 			v = Reflect.field(cls, f);
 		}
 		if(v == null && (v = Reflect.getProperty(o, f)) == null){
@@ -1401,18 +1461,31 @@ class Interp {
 			cl != null && setRedirects.exists(cl) && (_setRedirect = setRedirects[cl]) != null;
 		})
 			return _setRedirect(o, f, v);
-		if (o is HScriptedClass)
+		// if (o is HScriptedClass)
+		// {
+		// 	var proxy:PolymodScriptClass = Reflect.field(o, "_asc");
+		// 	if (proxy._interp.variables.exists(f))
+		// 	{
+		// 		proxy._interp.variables.set(f, v);
+		// 	}
+		// 	else if (proxy.superClass != null && UnsafeReflect.hasField(proxy.superClass, f))
+		// 	{
+		// 		UnsafeReflect.setProperty(proxy.superClass, f, v);
+		// 	}
+		// 	else if (proxy.superClass != null && UnsafeReflect.hasField(_proxy.superClass, f))
+		// 	{
+		// 		UnsafeReflect.setProperty(proxy.superClass, f, v);
+		// 	}
+		// 	return v;
+		// }
+		if (Std.isOfType(o, PolymodScriptClass))
 		{
-			var proxy:PolymodAbstractScriptClass = Reflect.field(o, "_asc");
+			var proxy:PolymodScriptClass = cast(o, PolymodScriptClass);
 			if (proxy._interp.variables.exists(f))
 			{
 				proxy._interp.variables.set(f, v);
 			}
 			else if (proxy.superClass != null && UnsafeReflect.hasField(proxy.superClass, f))
-			{
-				UnsafeReflect.setProperty(proxy.superClass, f, v);
-			}
-			else if (proxy.superClass != null && UnsafeReflect.hasField(_proxy.superClass, f))
 			{
 				UnsafeReflect.setProperty(proxy.superClass, f, v);
 			}
@@ -1427,15 +1500,32 @@ class Interp {
 
 	function fcall(o:Dynamic, f:String, args:Array<Dynamic>):Dynamic {
 		// OVERRIDE CHANGE: Custom logic to handle super calls to prevent infinite recursion
+		/*
+		if (o == scriptObject && _scriptObjectType == SCustomClass)
+		{
+			// Force call super function.
+			var func:Function;
+			if ((func = variables.get(f)) == null && (func = publicVariables.get(f)) == null)
+				func = get(scriptObject, "__hsx_super_" + f);
+			return func == null ? null : call(scriptObject, func, args);
+		}
+		*/
 		if (_proxy != null && o == _proxy.superClass)
 		{
 			// Force call super function.
-			return call(o, get(o, '__super_${f}'), args);
+			return this.fcall(o, '__hsx_super_${f}', args);
 		}
-		else if (Std.isOfType(o, HScriptedClass))
+		else if (Std.isOfType(o, PolymodScriptClass))
 		{
-			return Reflect.field(o, "_asc").callFunction(f, args);
+			// _nextCallObject = null;
+			var proxy:PolymodScriptClass = cast(o, PolymodScriptClass);
+			return proxy.callFunction(f, args);
 		}
+		// else
+		// if (Std.isOfType(o, HScriptedClass) && o != scriptObject)
+		// {
+		// 	return UnsafeReflect.field(o, "_asc").callFunction(f, args);
+		// }
 
 		var func = get(o, f);
 
@@ -1447,20 +1537,13 @@ class Interp {
 		}
 		#end
 
-		// if(o == CustomClassHandler.staticHandler && scriptObject != null) {
-		// 	return UnsafeReflect.callMethod(scriptObject, UnsafeReflect.field(scriptObject, "_HX_SUPER__" + f), args);
+		// if(func == null && o == scriptObject && _scriptObjectType == SCustomClass) {
+		// 	return UnsafeReflect.callMethod(scriptObject, UnsafeReflect.field(scriptObject, "__hsx_super_" + f), args);
 		// }
-		return call(o, func, args);
+		return func == null ? null : call(o, func, args);
 	}
 
 	function call(o:Dynamic, f:Dynamic, args:Array<Dynamic>):Dynamic {
-		if (o != null && o == _proxy)
-		{
-			// If we are calling this.fn(), special handling is needed to prevent the local scope from being destroyed.
-			// By checking `target == _proxy`, we handle BOTH fn() and this.fn().
-			// super.fn() is exempt since it is not scripted.
-			return callThis(f, args);
-		}
 		// if(f == CustomClassHandler.staticHandler) {
 		// 	return null;
 		// }
@@ -1477,7 +1560,9 @@ class Interp {
 		this.depth++;
 
 		// Call the function.
-		var result = UnsafeReflect.callMethod(_proxy, fun, args);
+		var result = UnsafeReflect.callMethod(scriptObject, fun, args);
+
+		this.depth--;
 
 		// Restore the local scope.
 		this.locals = capturedLocals;
@@ -1493,21 +1578,24 @@ class Interp {
 			case EClass(_, fields, extend, interfaces):
 				try
 				{
-					function importVar(thing:String):String
-					{
-						if (thing == null)
-							return "hscript.TemplateClass";
-						final variable:Class<Dynamic> = customClasses.exists(thing) ? null : resolve(thing, false);
-						return variable == null ? thing : Type.getClassName(variable);
+					var scriptedCls:Dynamic;
+					if (extend == null) {
+						scriptedCls = "hscript.TemplateClass";
+					} else {
+						final variable:Class<Dynamic> = customClasses.exists(extend) ? null : resolve(extend, false);
+						scriptedCls = variable == null ? extend : Type.getClassName(variable);
 					}
-					var scriptedCls:Dynamic = importVar(extend);
 					if (scriptedCls == null || (scriptedCls = Type.resolveClass(scriptedCls + "_HSX")) == null)
 						return null;
-					return Reflect.field(scriptedCls, "__hsx_init")(cl, args).callNew(args);
+					var cl = Reflect.field(scriptedCls, "__hsx_init")(cl, this, args);
+					trace(cl);
+					// return Reflect.field(cl, "asc");
+					return cl;
 				}
 				catch(e)
 				{
-					trace(e.details());
+					trace("    " + e);
+					trace("    " + e.details());
 					return null;
 				}
 
@@ -1515,11 +1603,11 @@ class Interp {
 				return Type.createInstance(resolve(cl), args);
 		}
 	}
-	public function createScriptClassInstance(className:String):PolymodAbstractScriptClass
+	public function createScriptClassInstance(className:String, ?args:Array<Dynamic>):PolymodAbstractScriptClass
 	{
 		switch (customClasses.get(className))
 		{
-			case EClass(_, fields, extend, interfaces):
+			case EClass(className, fields, extend, interfaces):
 				function importVar(thing:String):String
 				{
 					if (thing == null)
@@ -1529,7 +1617,8 @@ class Interp {
 				}
 				return new PolymodScriptClass(
 							this, className, fields, importVar(extend),
-							[for (i in interfaces) importVar(i)]
+							[for (i in interfaces) importVar(i)],
+							args
 						);
 			default:
 				return null;

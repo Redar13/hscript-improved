@@ -1,6 +1,7 @@
 package hscript.custom_classes;
 
-import hscript.custom_classes.PolymodAbstractScriptClass;
+import haxe.CallStack;
+import haxe.macro.Expr.Catch;
 import hscript.custom_classes.PolymodClassDeclEx;
 import hscript.Expr;
 import hscript.Printer;
@@ -42,22 +43,25 @@ class PolymodScriptClass
 	 */
 	public static final defaultImports:Map<String, Class<Dynamic>> = new Map<String, Class<Dynamic>>();
 
-	public inline static function createScriptClassInstance(clsName:String, interp:Interp):PolymodAbstractScriptClass
+	public static function createScriptClassInstance(clsName:String, interp:Interp, ?args:Array<Dynamic>):PolymodAbstractScriptClass
 	{
-		return interp.createScriptClassInstance(clsName);
+		return interp.createScriptClassInstance(clsName, args);
 	}
 
 	public var name:String;
 	public var extend:String;
-	public var cl:Class<Dynamic>;
+	public var cl:Class<Dynamic>; // class referense
+	public var fields:Array<Expr>; // class referense
 	/**
 	 * INSTANCE METHODS
 	 */
-	public function new(ogInterp:Interp, name:String, fields:Array<Expr>, ?extend:String, ?interfaces:Array<String>)
+	public function new(ogInterp:Interp, name:String, fields:Array<Expr>, ?extend:String, ?interfaces:Array<String>, ?args:Array<Dynamic>)
 	{
 		this.name = name;
 		_parentInterp = ogInterp;
+		this.fields = fields;
 		this.cl = extend == null ? TemplateClass : Type.resolveClass('${extend}_HSX');
+		callNew(args);
 	}
 	/*
 	public function new(c:ClassDeclEx, args:Array<Dynamic>, ?parentInterp:Interp)
@@ -90,11 +94,22 @@ class PolymodScriptClass
 
 	public function callNew(?args:Array<Dynamic>)
 	{
-		_interp = new Interp(superClass);
+		_interp = new Interp(cl);
 		_interp._proxy = this;
 		// _c = c;
 		_interp.errorHandler = _parentInterp.errorHandler;
+		_interp.importFailedCallback = _parentInterp.importFailedCallback;
+		_interp.onMetadata = _parentInterp.onMetadata;
+		_interp.staticVariables = _parentInterp.staticVariables;
 		// buildCaches();
+		_interp.variables.remove("trace");
+
+		if (fields != null)
+		{
+			for (i in fields)
+				this._interp.expr(i);
+			// fields = null;
+		}
 
 		if (findField("new") != null)
 		{
@@ -110,6 +125,9 @@ class PolymodScriptClass
 		{
 			createSuperClass(args);
 		}
+		trace(superClass);
+		trace(Type.getClassName(Type.getClass(superClass)));
+		_interp.scriptObject = superClass;
 		return superClass;
 	}
 
@@ -139,10 +157,10 @@ class PolymodScriptClass
 			return;
 		}
 
-		var fullExtendString = '${extend}_HSX';
+		// var fullExtendString = '${extend}_HSX';
 
 		// Build an unqualified path too.
-		var extendString = fullExtendString.substr(fullExtendString.lastIndexOf(".") + 1);
+		// var extendString = fullExtendString.substr(fullExtendString.lastIndexOf(".") + 1);
 
 		// var classDescriptor = _interp.findScriptClassDescriptor(extendString);
 		// if (classDescriptor != null)
@@ -158,8 +176,20 @@ class PolymodScriptClass
 	@:privateAccess(hscript.Interp)
 	public function callFunction(fnName:String, args:Array<Dynamic> = null):Dynamic
 	{
-		var func = get(fnName);
-		return UnsafeReflect.isFunction(func) ? _interp.call(null, func, args) : null;
+		// trace(fnName); for (i in CallStack.callStack()) trace(Std.string(i));
+		// Force call super function.
+		var func:haxe.Constraints.Function;
+		if ((func = _interp.variables.get(fnName)) == null && (func = _interp.publicVariables.get(fnName)) == null)
+		{
+			for (i => a in args)
+			{
+				if (Std.isOfType(a, PolymodScriptClass))
+					args[i] = cast(a, PolymodScriptClass).superClass;
+			}
+			func =  superClass == null ? null : _interp.get(superClass, "__hsx_super_" + fnName);
+		}
+		// return func == null ? null : _interp.callThis(func, args);
+		return func == null ? null : _interp.call(superClass, func, args);
 		/*
 		var field = findField(fnName);
 		var r:Dynamic = null;
@@ -285,28 +315,12 @@ class PolymodScriptClass
 	 * @param cacheOnly If false, scan the full list of fields.
 	 *                  If true, ignore uncached fields.
 	 */
-	private function findFunction(name:String, cacheOnly:Bool = true):Null<FunctionDecl>
+	private function findFunction(name:String, cacheOnly:Bool = true):haxe.Constraints.Function
 	{
-		if (_cachedFunctionDecls != null)
-		{
-			return _cachedFunctionDecls.get(name);
-		}
-		if (cacheOnly) return null;
-
-		for (f in _c.fields)
-		{
-			if (f.name == name)
-			{
-				switch (f.kind)
-				{
-					case KFunction(fn):
-						return fn;
-					case _:
-				}
-			}
-		}
-
-		return null;
+		var func:haxe.Constraints.Function = null;
+		if ((func = _interp.variables.get(name)) == null)
+			func = _interp.publicVariables.get(name);
+		return func;
 	}
 
 	/**
@@ -325,15 +339,12 @@ class PolymodScriptClass
 	{
 		switch (name)
 		{
-			case "superClass":
-				return this.superClass;
-			case "createSuperClass":
-				return this.createSuperClass;
-			case "findFunction":
-				return this.findFunction;
-			case "callFunction":
-				return this.callFunction;
+			case "superClass":		  return this.superClass;
+			case "createSuperClass":  return this.createSuperClass;
+			case "findFunction":	  return this.findFunction;
+			case "callFunction":	  return this.callFunction;
 			case _:
+				/*
 				var varDecl:VarDecl = findVar(name);
 				if (varDecl != null)
 				{
@@ -351,8 +362,16 @@ class PolymodScriptClass
 					}
 					return varValue;
 				}
+				*/
+				var expr = _interp.resolve(name, _parentInterp == null, true);
+				return expr == null && _parentInterp != null ? _parentInterp.resolve(name, true, true) : expr;
+				/*
+				if (_interp.varExists(name))
+				{
+					return _interp.resolve(name, true, false);
+				}
 				if (superClass != null) {
-					if (Type.getClass(superClass) == null) {
+					if (cl == null) {
 						// Anonymous structure
 						if (Reflect.hasField(superClass, name)) {
 							return Reflect.field(this.superClass, name);
@@ -367,7 +386,7 @@ class PolymodScriptClass
 						}
 					} else {
 						// Class object
-						var fields = Type.getInstanceFields(Type.getClass(this.superClass));
+						var fields = Type.getInstanceFields(cl);
 						if (fields.contains(name) || fields.contains('get_$name')) {
 							return Reflect.getProperty(this.superClass, name);
 						} else {
@@ -380,6 +399,7 @@ class PolymodScriptClass
 				{
 					return _parentInterp.resolve(name, true, false);
 				}
+				*/
 		}
 		return null;
 	}
@@ -392,26 +412,10 @@ class PolymodScriptClass
 	 */
 	private function findVar(name:String, cacheOnly:Bool = false):Null<VarDecl>
 	{
-		if (_cachedVarDecls != null)
-		{
-			return _cachedVarDecls.get(name);
-		}
-		if (cacheOnly) return null;
-
-		for (f in _c.fields)
-		{
-			if (f.name == name)
-			{
-				switch (f.kind)
-				{
-					case KVar(v):
-						return v;
-					case _:
-				}
-			}
-		}
-
-		return null;
+		var func = null;
+		if ((func = _interp.variables.get(name)) == null)
+			func = _interp.publicVariables.get(name);
+		return func;
 	}
 
 	/**
@@ -422,20 +426,7 @@ class PolymodScriptClass
 	 */
 	private function findField(name:String, cacheOnly:Bool = true):Null<FieldDecl>
 	{
-		if (_cachedFieldDecls != null)
-		{
-			return _cachedFieldDecls.get(name);
-		}
-		if (cacheOnly) return null;
-
-		for (f in _c.fields)
-		{
-			if (f.name == name)
-			{
-				return f;
-			}
-		}
-		return null;
+		return _interp.resolve(name);
 	}
 
 	public function listFunctions():Map<String, FunctionDecl>

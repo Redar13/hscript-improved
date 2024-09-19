@@ -405,36 +405,36 @@ class Parser {
 			case TBrOpen:
 				tk = token();
 				switch( tk ) {
-				case TBrClose:
-					return parseExprNext(mk(EObject([]),p1));
-				case TId(_):
-					var tk2 = token();
-					push(tk2);
-					push(tk);
-					switch( tk2 ) {
-						case TDoubleDot:
-							return parseExprNext(parseObject(p1));
-						default:
-					}
-				case TConst(c):
-					if( allowJSON ) {
-						switch( c ) {
-							case CString(_):
-								var tk2 = token();
-								push(tk2);
-								push(tk);
-								switch( tk2 ) {
-									case TDoubleDot:
-										return parseExprNext(parseObject(p1));
-									default:
-								}
-							default:
-								push(tk);
-						}
-					} else
+					case TBrClose:
+						return parseExprNext(mk(EObject([]),p1));
+					case TId(_):
+						var tk2 = token();
+						push(tk2);
 						push(tk);
-				default:
-					push(tk);
+						switch( tk2 ) {
+							case TDoubleDot:
+								return parseExprNext(parseObject(p1));
+							default:
+						}
+					case TConst(c):
+						if( allowJSON ) {
+							switch( c ) {
+								case CString(_):
+									var tk2 = token();
+									push(tk2);
+									push(tk);
+									switch( tk2 ) {
+										case TDoubleDot:
+											return parseExprNext(parseObject(p1));
+										default:
+									}
+								default:
+									push(tk);
+							}
+						} else
+							push(tk);
+					default:
+						push(tk);
 				}
 				var a = new Array();
 				while( true ) {
@@ -507,12 +507,12 @@ class Parser {
 			args.push({ name : id, t : t });
 			var tk = token();
 			switch( tk ) {
-			case TComma:
-			case TPClose:
-				break;
-			default:
-				unexpected(tk);
-				break;
+				case TComma:
+				case TPClose:
+					break;
+				default:
+					unexpected(tk);
+					break;
 			}
 		}
 		ensureToken(TOp("->"));
@@ -569,9 +569,9 @@ class Parser {
 		if( e == null && resumeErrors )
 			return null;
 		return switch( expr(e) ) {
-		case EBinop(bop, e1, e2): mk(EBinop(bop, makeUnop(op, e1), e2), pmin(e1), pmax(e2));
-		case ETernary(e1, e2, e3): mk(ETernary(makeUnop(op, e1), e2, e3), pmin(e1), pmax(e3));
-		default: mk(EUnop(op,true,e),pmin(e),pmax(e));
+			case EBinop(bop, e1, e2): mk(EBinop(bop, makeUnop(op, e1), e2), pmin(e1), pmax(e2));
+			case ETernary(e1, e2, e3): mk(ETernary(makeUnop(op, e1), e2, e3), pmin(e1), pmax(e3));
+			default: mk(EUnop(op,true,e),pmin(e),pmax(e));
 		}
 	}
 
@@ -629,7 +629,7 @@ class Parser {
 				nextIsOverride = true;
 				var nextToken = token();
 				switch(nextToken) {
-					case TId(_i = "private" | "public" | "function" | "static" | "var" | "final"):
+					case TId(_i = "private" | "public" | "inline" | "function" | "static" | "var" | "final"):
 						var str = parseStructure(_i);
 						nextIsOverride = false;
 						str;
@@ -642,7 +642,7 @@ class Parser {
 				nextIsStatic = true;
 				var nextToken = token();
 				switch(nextToken) {
-					case TId(_i = "private" | "public" | "function" | "override" | /* "class" |*/ "var" | "final"):
+					case TId(_i = "private" | "public" | "inline" | "function" | "override" | /* "class" |*/ "var" | "final"):
 						var str = parseStructure(_i);
 						nextIsStatic = false;
 						str;
@@ -655,7 +655,7 @@ class Parser {
 				nextIsPublic = true;
 				var nextToken = token();
 				switch(nextToken) {
-					case TId(_i = "class" | "static" | "function" | "override" | "var" | "final"):
+					case TId(_i = "class" | "static" | "inline" | "function" | "override" | "var" | "final"):
 						var str = parseStructure(_i);
 						nextIsPublic = false;
 						str;
@@ -672,7 +672,7 @@ class Parser {
 				nextIsPrivate = true;
 				var nextToken = token();
 				switch(nextToken) {
-					case TId(_i = "static" | "function" | "override" | "var" | "final" | "class"):
+					case TId(_i = "static" | "function" | "inline" | "override" | "var" | "final" | "class"):
 						var str = parseStructure(_i);
 						nextIsPrivate = false;
 						str;
@@ -772,7 +772,13 @@ class Parser {
 
 				var tk = token();
 				push(tk);
-				mk(EFunction(inf.args, inf.body, name, inf.ret, nextIsPublic, nextIsStatic, nextIsOverride, nextIsPrivate, nextIsFinal, nextIsInline),p1,pmax(inf.body));
+				mk(EFunction(
+						inf.args, inf.body,
+						name, inf.ret,
+						nextIsPublic, nextIsStatic,
+						nextIsOverride, nextIsPrivate,
+						nextIsFinal, nextIsInline
+					), p1, pmax(inf.body));
 			case "import":
 				var oldReadPos = readPos;
 				var tk = token();
@@ -940,7 +946,6 @@ class Parser {
 			case "return":
 				var tk = token();
 				push(tk);
-				// TODO: Fix bug with function return
 				var e = if( tk == TSemicolon ) null else parseExpr();
 				mk(EReturn(e),p1,if( e == null ) tokenMax else pmax(e));
 			case "new":
@@ -1008,7 +1013,7 @@ class Parser {
 								tk = token();
 								push(tk);
 								switch( tk ) {
-									case TId("case"), TId("default"), TBrClose:
+									case TId("case" | "default"), TBrClose:
 										break;
 									case TEof if( resumeErrors ):
 										break;
@@ -1030,7 +1035,7 @@ class Parser {
 								tk = token();
 								push(tk);
 								switch( tk ) {
-									case TId("case"), TId("default"), TBrClose:
+									case TId("case" | "default"), TBrClose:
 										break;
 									case TEof if( resumeErrors ):
 										break;
@@ -1061,7 +1066,6 @@ class Parser {
 		var tk = token();
 		switch( tk ) {
 			case TOp(op):
-
 				if( op == "->" ) {
 					// single arg reinterpretation of `f -> e` , `(f) -> e` and `(f:T) -> e`
 					switch( expr(e1) ) {
@@ -1696,15 +1700,15 @@ class Parser {
 								var tk = token();
 								var pow : Null<Int> = null;
 								switch( tk ) {
-								case TConst(CInt(e)): pow = e;
-								case TOp("-"):
-									tk = token();
-									switch( tk ) {
-									case TConst(CInt(e)): pow = -e;
-									default: push(tk);
-									}
-								default:
-									push(tk);
+									case TConst(CInt(e)): pow = e;
+									case TOp("-"):
+										tk = token();
+										switch( tk ) {
+											case TConst(CInt(e)): pow = -e;
+											default: push(tk);
+										}
+									default:
+										push(tk);
 								}
 								if( pow == null )
 									invalidChar(char);
@@ -1746,20 +1750,20 @@ class Parser {
 								while( true ) {
 									char = readChar();
 									switch( char ) {
-									case 48,49,50,51,52,53,54,55,56,57: // 0-9
-										n = haxe.Int32.add(haxe.Int32.shl(n,4), cast (char - 48));
-									case 65,66,67,68,69,70: // A-F
-										n = haxe.Int32.add(haxe.Int32.shl(n,4), cast (char - 55));
-									case 97,98,99,100,101,102: // a-f
-										n = haxe.Int32.add(haxe.Int32.shl(n,4), cast (char - 87));
-									case '_'.code:
-									default:
-										this.char = char;
-										// we allow to parse hexadecimal Int32 in Neko, but when the value will be
-										// evaluated by Interpreter, a failure will occur if no Int32 operation is
-										// performed
-										var v = try CInt(haxe.Int32.toInt(n)) catch( e : Dynamic ) CInt32(n);
-										return TConst(v);
+										case 48,49,50,51,52,53,54,55,56,57: // 0-9
+											n = haxe.Int32.add(haxe.Int32.shl(n,4), cast (char - 48));
+										case 65,66,67,68,69,70: // A-F
+											n = haxe.Int32.add(haxe.Int32.shl(n,4), cast (char - 55));
+										case 97,98,99,100,101,102: // a-f
+											n = haxe.Int32.add(haxe.Int32.shl(n,4), cast (char - 87));
+										case '_'.code:
+										default:
+											this.char = char;
+											// we allow to parse hexadecimal Int32 in Neko, but when the value will be
+											// evaluated by Interpreter, a failure will occur if no Int32 operation is
+											// performed
+											var v = try CInt(haxe.Int32.toInt(n)) catch( e : Dynamic ) CInt32(n);
+											return TConst(v);
 									}
 								}
 								#end
@@ -1772,12 +1776,12 @@ class Parser {
 								while( true ) {
 									char = readChar();
 									switch( char ) {
-									case 48,49: // 0-1
-										n = (n << 1) + char - 48;
-									case '_'.code:
-									default:
-										this.char = char;
-										return TConst(CInt(n));
+										case 48,49: // 0-1
+											n = (n << 1) + char - 48;
+										case '_'.code:
+										default:
+											this.char = char;
+											return TConst(CInt(n));
 									}
 								}
 								#else
@@ -1785,16 +1789,16 @@ class Parser {
 								while( true ) {
 									char = readChar();
 									switch( char ) {
-									case 48,49: // 0-1
-										n = haxe.Int32.add(haxe.Int32.shl(n,1), cast (char - 48));
-									case '_'.code:
-									default:
-										this.char = char;
-										// we allow to parse binary Int32 in Neko, but when the value will be
-										// evaluated by Interpreter, a failure will occur if no Int32 operation is
-										// performed
-										var v = try CInt(haxe.Int32.toInt(n)) catch( e : Dynamic ) CInt32(n);
-										return TConst(v);
+										case 48,49: // 0-1
+											n = haxe.Int32.add(haxe.Int32.shl(n,1), cast (char - 48));
+										case '_'.code:
+										default:
+											this.char = char;
+											// we allow to parse binary Int32 in Neko, but when the value will be
+											// evaluated by Interpreter, a failure will occur if no Int32 operation is
+											// performed
+											var v = try CInt(haxe.Int32.toInt(n)) catch( e : Dynamic ) CInt32(n);
+											return TConst(v);
 									}
 								}
 								#end
@@ -1811,34 +1815,44 @@ class Parser {
 				case ".".code:
 					char = readChar();
 					switch( char ) {
-					case 48,49,50,51,52,53,54,55,56,57:
-						var n = char - 48;
-						var exp = 1;
-						while( true ) {
-							char = readChar();
-							exp *= 10;
-							switch( char ) {
-							case 48,49,50,51,52,53,54,55,56,57:
-								n = n * 10 + (char - 48);
-							default:
-								this.char = char;
-								return TConst( CFloat(n/exp) );
+						case 48,49,50,51,52,53,54,55,56,57:
+							var n = char - 48;
+							var exp = 1;
+							while( true ) {
+								char = readChar();
+								exp *= 10;
+								switch( char ) {
+									case 48,49,50,51,52,53,54,55,56,57:
+										n = n * 10 + (char - 48);
+									default:
+										this.char = char;
+										return TConst( CFloat(n/exp) );
+								}
 							}
-						}
-					case ".".code:
-						char = readChar();
-						if( char != ".".code )
-							invalidChar(char);
-						return TOp("...");
-					default:
-						this.char = char;
-						return TDot;
+						case ".".code:
+							char = readChar();
+							if( char != ".".code )
+								invalidChar(char);
+							return TOp("...");
+						default:
+							this.char = char;
+							return TDot;
 					}
 				case "{".code: return TBrOpen;
 				case "}".code: return TBrClose;
 				case "[".code: return TBkOpen;
 				case "]".code: return TBkClose;
-				case "'".code, '"'.code: return TConst( CString(readString(char)) );
+				case "'".code:
+					/**
+					 *
+					 *
+					 * EBlock
+					 *
+					 *
+					 */
+					var e = new Array();
+					return TConst( CString(readString(char)) );
+				case '"'.code:return TConst( CString(readString(char)) );
 				case "?".code:
 					char = readChar();
 					switch (char) {
@@ -2101,8 +2115,7 @@ class Parser {
 		return switch( t ) {
 			case TEof: "<eof>";
 			case TConst(c): constString(c);
-			case TId(s): s;
-			case TOp(s): s;
+			case TId(s) | TOp(s): s;
 			case TPOpen: "(";
 			case TPClose: ")";
 			case TBrOpen: "{";

@@ -186,8 +186,9 @@ class HScriptedClassMacro
 		}
 		// Context.info('  Building scripted class __hsx_init() function', Context.currentPos());
 
+		// trace(clsTypeName);
 		return {
-			name: '__hsx_init',
+			name: "__hsx_init",
 			doc: "Initializes a scripted class instance using the given scripted class name and constructor arguments.",
 			access: [APublic, AStatic],
 			meta: null,
@@ -196,13 +197,14 @@ class HScriptedClassMacro
 				args: [
 					{name: 'clsName', type: Context.toComplexType(Context.getType('String'))},
 					{name: 'interp', type: Context.toComplexType(Context.getType('hscript.Interp'))},
+					{name: 'args', opt: true, type: Context.toComplexType(Context.getType('Array'))},
 				],
 				params: null,
 				ret: Context.toComplexType(Context.getType(clsTypeName)),
 				expr: macro
 				{
 					trace('do something ($clsName)');
-					var asc:hscript.custom_classes.PolymodAbstractScriptClass = hscript.custom_classes.PolymodScriptClass.createScriptClassInstance(clsName, interp);
+					var asc = hscript.custom_classes.PolymodScriptClass.createScriptClassInstance(clsName, interp, args);
 					if (asc == null)
 					{
 						// polymod.Polymod.error(SCRIPT_RUNTIME_EXCEPTION, 'Could not construct instance of scripted class (${clsName} extends ' + $v{clsTypeName} + ')');
@@ -210,7 +212,7 @@ class HScriptedClassMacro
 					}
 					var scriptedObj = asc.superClass;
 
-					Reflect.setField(scriptedObj, '_asc', asc);
+					Reflect.setField(scriptedObj, "_asc", asc);
 
 					return scriptedObj;
 				},
@@ -289,7 +291,7 @@ class HScriptedClassMacro
 		};
 
 		var var__asc:Field = {
-			name: '_asc',
+			name: "_asc",
 			doc: "The AbstractScriptClass instance which any variable or function calls are redirected to internally.",
 			access: [APrivate], // Private instance variable
 			kind: FVar(Context.toComplexType(Context.getType('hscript.custom_classes.PolymodAbstractScriptClass'))),
@@ -398,9 +400,10 @@ class HScriptedClassMacro
 				ret: Context.toComplexType(Context.getType('String')),
 				expr: macro
 				{
+					trace("toString");
 					if (_asc == null)
 					{
-						return Std.string(this);
+						return $v{cls.name};
 					}
 					else
 					{
@@ -698,8 +701,7 @@ class HScriptedClassMacro
 			case TLazy(lt):
 				// A lazy wrapper for another field.
 				// We have to call the function to get the true value.
-				var ltv:Type = lt();
-				return overrideField(field, targetParams, ltv);
+				return overrideField(field, targetParams, lt());
 			case TFun(args, ret):
 				if (field.params.length > 0) // nah i give up
 					return [];
@@ -724,7 +726,6 @@ class HScriptedClassMacro
 					}
 				}
 
-				var isDynamic = false;
 				// We need to skip overriding functions which are inline.
 				// Normal Haxe classes can't override these functions anyway, so we can skip them.
 				switch (field.kind)
@@ -732,14 +733,25 @@ class HScriptedClassMacro
 					case FMethod(k):
 						switch (k)
 						{
+							case MethNormal: // Do nothing.
+							default: return [];
+						}
+					/*
+					case FMethod(k):
+						switch (k)
+						{
 							case MethInline:
 								// Context.info('  Skipping: "${field.name}" is inline function', Context.currentPos());
 								return [];
 							case MethDynamic:
-								isDynamic = true;
+								// Context.info('  Skipping: "${field.name}" is dynamic function', Context.currentPos());
+								return [];
+							case MethMacro:
+								// Context.info('  Skipping: "${field.name}" is macro function', Context.currentPos());
 								return [];
 							default: // Do nothing.
 						}
+					*/
 					default: // Do nothing.
 				}
 
@@ -768,8 +780,6 @@ class HScriptedClassMacro
 				var func_access = [AOverride];
 				if (field.isFinal)
 					func_access.push(AFinal);
-				else if (isDynamic)
-					func_access.push(ADynamic);
 				if (field.isPublic)
 				{
 					func_access.push(APublic);
@@ -790,10 +800,11 @@ class HScriptedClassMacro
 							var isOptional = (arg.value == null);
 
 							var val:Expr = arg.value == null ? null : Context.getTypedExpr(arg.value);
+							var type:Null<ComplexType> = Context.toComplexType(arg.v.t);
 
 							func_inputArgs.push({
 								name: arg.v.name,
-								type: Context.toComplexType(arg.v.t),
+								type: type,
 								// type: Context.toComplexType(deparameterizeType(arg.v.t, targetParams)),
 								// opt: isOptional,
 								meta: arg.v.meta.get(),
@@ -868,7 +879,7 @@ class HScriptedClassMacro
 					}),
 				};
 				var func_superCall:Field = {
-					name: '__super_' + funcName,
+					name: '__hsx_super_' + funcName,
 					doc: 'Calls the original ${field.name} function while ignoring the ScriptedClass override.',
 					access: [APrivate],
 					meta: field.meta.get(),
