@@ -204,9 +204,10 @@ class HScriptedClassMacro
 				expr: macro
 				{
 					trace('do something ($clsName)');
-					var asc = hscript.custom_classes.PolymodScriptClass.createScriptClassInstance(clsName, interp, args);
+					var asc:hscript.custom_classes.PolymodAbstractScriptClass = hscript.custom_classes.PolymodScriptClass.createScriptClassInstance(clsName, interp, args);
 					if (asc == null)
 					{
+						trace("fail");
 						// polymod.Polymod.error(SCRIPT_RUNTIME_EXCEPTION, 'Could not construct instance of scripted class (${clsName} extends ' + $v{clsTypeName} + ')');
 						return null;
 					}
@@ -400,10 +401,20 @@ class HScriptedClassMacro
 				ret: Context.toComplexType(Context.getType('String')),
 				expr: macro
 				{
-					trace("toString");
+					// trace("toString");
 					if (_asc == null)
 					{
-						return $v{cls.name};
+						$
+						{
+							if (oldToString != null)
+							(
+								macro return super.toString()
+							)
+							else
+							(
+								macro return $v{cls.name}
+							)
+						}
 					}
 					else
 					{

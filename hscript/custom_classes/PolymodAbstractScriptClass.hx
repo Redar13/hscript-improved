@@ -9,7 +9,8 @@ abstract PolymodAbstractScriptClass(PolymodScriptClass) from PolymodScriptClass
 	{
 		return this.callFunction(f, args);
 	}
-	private function resolveField(name:String):Dynamic
+	@:op(a.b)
+	public function resolveField(name:String):Dynamic
 	{
 		return this.get(name);
 		/*
@@ -115,7 +116,6 @@ abstract PolymodAbstractScriptClass(PolymodScriptClass) from PolymodScriptClass
 		*/
 	}
 
-	@:op(a.b)
 	public function fieldRead(name:String):Dynamic
 	{
 		return resolveField(name);

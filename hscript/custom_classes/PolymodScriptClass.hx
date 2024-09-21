@@ -51,14 +51,14 @@ class PolymodScriptClass
 	public var name:String;
 	public var extend:String;
 	public var cl:Class<Dynamic>; // class referense
-	public var fields:Array<Expr>; // class referense
+	public var fields:Array<Expr>;
 	/**
 	 * INSTANCE METHODS
 	 */
 	public function new(ogInterp:Interp, name:String, fields:Array<Expr>, ?extend:String, ?interfaces:Array<String>, ?args:Array<Dynamic>)
 	{
-		this.name = name;
 		_parentInterp = ogInterp;
+		this.name = name;
 		this.fields = fields;
 		this.cl = extend == null ? TemplateClass : Type.resolveClass('${extend}_HSX');
 		callNew(args);
@@ -97,10 +97,13 @@ class PolymodScriptClass
 		_interp = new Interp(cl);
 		_interp._proxy = this;
 		// _c = c;
-		_interp.errorHandler = _parentInterp.errorHandler;
-		_interp.importFailedCallback = _parentInterp.importFailedCallback;
-		_interp.onMetadata = _parentInterp.onMetadata;
-		_interp.staticVariables = _parentInterp.staticVariables;
+		if (_parentInterp != null)
+		{
+			_interp.errorHandler = _parentInterp.errorHandler;
+			_interp.importFailedCallback = _parentInterp.importFailedCallback;
+			_interp.onMetadata = _parentInterp.onMetadata;
+			_interp.staticVariables = _parentInterp.staticVariables;
+		}
 		// buildCaches();
 		_interp.variables.remove("trace");
 
@@ -140,7 +143,7 @@ class PolymodScriptClass
 		// UnsafeReflect.hasField(this, name) is REALLY expensive so we use a cache.
 		if (__superClassFieldList == null)
 		{
-			__superClassFieldList = UnsafeReflect.fields(superClass).concat(Type.getInstanceFields(Type.getClass(superClass)));
+			__superClassFieldList = Type.getInstanceFields(Type.getClass(superClass));
 		}
 		return __superClassFieldList.indexOf(name) != -1;
 	}
@@ -178,8 +181,9 @@ class PolymodScriptClass
 	{
 		// trace(fnName); for (i in CallStack.callStack()) trace(Std.string(i));
 		// Force call super function.
-		var func:haxe.Constraints.Function;
-		if ((func = _interp.variables.get(fnName)) == null && (func = _interp.publicVariables.get(fnName)) == null)
+		// trace(fnName);
+		var func:haxe.Constraints.Function = _interp.variables.get(fnName);
+		if (func == null && (func = _interp.publicVariables.get(fnName)) == null)
 		{
 			for (i => a in args)
 			{
@@ -282,6 +286,8 @@ class PolymodScriptClass
 
 	public var superClass:Dynamic = null;
 
+	public var className:String = "";
+	/*
 	public var className(get, null):String;
 
 	private function get_className():String
@@ -294,6 +300,7 @@ class PolymodScriptClass
 		name += _c.name;
 		return name;
 	}
+	*/
 
 	private function superConstructor(arg0:Dynamic = Unused, arg1:Dynamic = Unused, arg2:Dynamic = Unused, arg3:Dynamic = Unused)
 	{
@@ -364,7 +371,7 @@ class PolymodScriptClass
 				}
 				*/
 				var expr = _interp.resolve(name, _parentInterp == null, true);
-				return expr == null && _parentInterp != null ? _parentInterp.resolve(name, true, true) : expr;
+				return expr == null && _parentInterp != null ? _parentInterp.variables.get(name) : expr;
 				/*
 				if (_interp.varExists(name))
 				{
@@ -410,12 +417,12 @@ class PolymodScriptClass
 	 * @param cacheOnly If false, scan the full list of fields.
 	 *                  If true, ignore uncached fields.
 	 */
-	private function findVar(name:String, cacheOnly:Bool = false):Null<VarDecl>
+	private function findVar(name:String, cacheOnly:Bool = false):Dynamic
 	{
-		var func = null;
-		if ((func = _interp.variables.get(name)) == null)
-			func = _interp.publicVariables.get(name);
-		return func;
+		var v:Dynamic = _interp.variables.get(name);
+		if (v == null)
+			v = _interp.publicVariables.get(name);
+		return v;
 	}
 
 	/**
@@ -424,9 +431,9 @@ class PolymodScriptClass
 	 * @param cacheOnly If false, scan the full list of fields.
 	 *                  If true, ignore uncached fields.
 	 */
-	private function findField(name:String, cacheOnly:Bool = true):Null<FieldDecl>
+	private function findField(name:String, cacheOnly:Bool = true):Dynamic
 	{
-		return _interp.resolve(name);
+		return _interp.resolve(name, false, false);
 	}
 
 	public function listFunctions():Map<String, FunctionDecl>

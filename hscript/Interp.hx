@@ -127,7 +127,7 @@ class Interp {
 								_scriptObjectType = SStaticClass;
 							}
 						default: // Object Access
-							__instanceFields = Reflect.fields(v);
+							__instanceFields = UnsafeReflect.fields(v);
 							_scriptObjectType = SObject;
 					}
 				default: // Null or other
@@ -690,6 +690,7 @@ class Interp {
 	}
 
 	public function resolve(id:String, doException:Bool = true, resolveClass:Bool = true):Dynamic {
+		// trace(id);
 		switch id
 		{
 			case null | "null" /*| "_"*/: return null;
@@ -697,7 +698,7 @@ class Interp {
 				if (_proxy.superClass == null)
 					return _proxy.superConstructor;
 				else
-					return scriptObject;
+					return _proxy.superClass;
 		}
 		id = StringTools.trim(id);
 		if (locals.exists(id))
@@ -725,22 +726,24 @@ class Interp {
 				// We are calling a LOCAL function from the same module.
 				if (_proxy != null)
 				{
-					if (_proxy.findFunction(id, true) != null)
-					{
-						// _nextCallObject = _proxy;
-						return _proxy.get(id);
-					}
-					else if (_proxy.superHasField(id))
+					// if (_proxy.findFunction(id, true) != null)
+					// {
+					// 	// _nextCallObject = _proxy;
+					// 	return _proxy.get(id);
+					// }
+					// else
+					if (_proxy.superHasField(id))
 					{
 						// _nextCallObject = _proxy.superClass;
-						return Reflect.getProperty(_proxy.superClass, id);
+						return UnsafeReflect.getProperty(_proxy.superClass, id);
 					}
-					else
-					{
-						var r = _proxy.get(id);
-						// _nextCallObject = _proxy;
-						return r;
-					}
+					// else
+					// {
+					// 	var r = _proxy._parentInterp.resolve(id);
+					// 	// _nextCallObject = _proxy;
+					// 	return r;
+					// }
+
 					// var v = _proxy.get(id);
 					// if (v != null)
 					// {
@@ -1412,25 +1415,31 @@ class Interp {
 		var v = null;
 		if (Std.isOfType(o, PolymodScriptClass))
 		{
-			var proxy:PolymodAbstractScriptClass = cast(o, PolymodScriptClass);
-			if (proxy._interp.variables.exists(f))
-			{
-				return proxy._interp.variables.get(f);
-			}
-			else if (proxy.superClass != null && proxy.superHasField(f))
-			{
-				return Reflect.getProperty(proxy.superClass, f);
-			}
-			else
-			{
-				return proxy.resolveField(f);
-			}
+			// trace(f);
+			// var proxy:PolymodAbstractScriptClass = cast(o, PolymodScriptClass);
+			// if (proxy._interp.variables.exists(f))
+			// {
+			// 	return proxy._interp.variables.get(f);
+			// }
+			// else if (proxy.superClass != null && proxy.superHasField(f))
+			// {
+			// 	return Reflect.getProperty(proxy.superClass, f);
+			// }
+			// else
+			// {
+				return cast(o, PolymodScriptClass).get(f);
+			// }
 		}
 		else if (Std.isOfType(o, HScriptedClass))
 		{
+			// trace(f);
 			// I guess there's no way to distinguish between properties thatdon't exist,
 			// and properties that are equal to null?
-			return Reflect.getProperty(o, f);
+			// return Reflect.getProperty(o, f);
+			if(!isBypassAccessor || (v = Reflect.field(o, f)) == null){
+				v = Reflect.getProperty(o, f);
+			}
+			return v;
 		}
 		// if (o is HScriptedClass && o != scriptObject) {
 		// 	var proxy:PolymodAbstractScriptClass = Reflect.field(o, "_asc");
@@ -1443,7 +1452,7 @@ class Interp {
 		// 		return Reflect.getProperty(proxy.superClass, f);
 		// 	}
 		// }
-		if(isBypassAccessor && v == null && (v = Reflect.field(o, f)) == null){
+		if(isBypassAccessor && (v = Reflect.field(o, f)) == null){
 			v = Reflect.field(cls, f);
 		}
 		if(v == null && (v = Reflect.getProperty(o, f)) == null){
@@ -1510,7 +1519,7 @@ class Interp {
 			return func == null ? null : call(scriptObject, func, args);
 		}
 		*/
-		if (_proxy != null && o == _proxy.superClass)
+		if (_proxy != null && o == _proxy.superClass && f.indexOf("__hsx_super_") != 0)
 		{
 			// Force call super function.
 			return this.fcall(o, '__hsx_super_${f}', args);
@@ -1587,9 +1596,9 @@ class Interp {
 					}
 					if (scriptedCls == null || (scriptedCls = Type.resolveClass(scriptedCls + "_HSX")) == null)
 						return null;
-					var cl = Reflect.field(scriptedCls, "__hsx_init")(cl, this, args);
+					var cl = UnsafeReflect.field(scriptedCls, "__hsx_init")(cl, this, args);
 					trace(cl);
-					// return Reflect.field(cl, "asc");
+					// return UnsafeReflect.field(cl, "_asc");
 					return cl;
 				}
 				catch(e)
@@ -1617,7 +1626,7 @@ class Interp {
 				}
 				return new PolymodScriptClass(
 							this, className, fields, importVar(extend),
-							[for (i in interfaces) importVar(i)],
+							[]/*[for (i in interfaces) importVar(i)]*/,
 							args
 						);
 			default:
