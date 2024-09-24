@@ -65,10 +65,8 @@ class Utils {
 	}
 
 	public static function processModule(shadowClass:TypeDefinition, module:String, n:String) {
-		if (n.endsWith("_Impl_"))
-			n = n.substr(0, n.length - 6);
-		if (module.endsWith("_Impl_"))
-			module = module.substr(0, module.length - 6);
+		n = removeImpl(n);
+		module = removeImpl(module);
 
 		shadowClass.meta.push(
 			{
@@ -100,12 +98,17 @@ class Utils {
 	public static function fixModuleName(name:String) {
 		return [for(s in name.split(".")) if (s.charAt(0) == "_") s.substr(1) else s].join(".");
 	}
+
+	public static function removeImpl(name:String) {
+		if (name.endsWith("_Impl_"))
+			name = name.substr(0, name.length - 6);
+		return name;
+	}
+
 	public static function processImport(imports:Array<ImportExpr>, module:String, n:String) {
-		if (n.endsWith("_Impl_"))
-			n = n.substr(0, n.length - 6);
+		n = removeImpl(n);
 		module = fixModuleName(module);
-		if (module.endsWith("_Impl_"))
-			module = module.substr(0, module.length - 6);
+		module = removeImpl(module);
 
 		imports.push({
 			path: [for(m in module.split(".")) {

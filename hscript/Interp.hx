@@ -454,7 +454,7 @@ class Interp {
 					UnsafeReflect.setProperty(_proxy.superClass, f, v);
 					return v;
 				}
-				// TODO: Fix bug with assign after "trace(this)"
+				// TODO: Fix bug with assign after "trace(this)" and not
 				var obj = expr(e);
 				if(s && obj == null) return null;
 				v = set(obj, f, v);

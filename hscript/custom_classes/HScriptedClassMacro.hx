@@ -221,6 +221,7 @@ class HScriptedClassMacro
 
 	static function buildScriptedClassUtils(cls:ClassType, superCls:ClassType):Array<Field>
 	{
+		/*
 		var function_scriptGet:Field = {
 			name: 'scriptGet',
 			doc: 'Retrieves the value of a local variable of a scripted class.',
@@ -285,6 +286,13 @@ class HScriptedClassMacro
 				},
 			}),
 		};
+		return [
+			var__asc,
+			function_scriptCall,
+			function_scriptGet,
+			function_scriptSet
+		];
+		*/
 
 		var var__asc:Field = {
 			name: "_asc",
@@ -293,12 +301,8 @@ class HScriptedClassMacro
 			kind: FVar(Context.toComplexType(Context.getType('hscript.custom_classes.PolymodAbstractScriptClass'))),
 			pos: cls.pos,
 		};
-
 		return [
-			var__asc,
-			function_scriptCall,
-			function_scriptGet,
-			function_scriptSet
+			var__asc
 		];
 	}
 
@@ -434,7 +438,7 @@ class HScriptedClassMacro
 			else
 			{
 				var results:Array<Field> = overrideField(field, targetParams);
-				if (results.length == 0)
+				if (results == null || results.length == 0)
 				{
 					fields.set(field.name, false);
 				}
@@ -710,7 +714,7 @@ class HScriptedClassMacro
 				return overrideField(field, targetParams, lt());
 			case TFun(args, ret):
 				if (field.params.length > 0) // nah i give up
-					return [];
+					return null;
 				// This field is a function of the class.
 				// We need to redirect to the scripted class in case our scripted class overrides it.
 				// If it isn't overridden, the AbstractScriptClass will call the original function.
@@ -726,10 +730,17 @@ class HScriptedClassMacro
 							if (typ != null && typ.isPrivate)
 							{
 								// Context.info('  Skipping: "${field.name}" contains private type ${typ.module}.${typ.name}', Context.currentPos());
-								return [];
+								return null;
 							}
 						default: // Do nothing.
 					}
+				}
+
+				if (field.isFinal)
+				{
+					// Context.info('  Skipping: "${field.name}" is final function', Context.currentPos());
+					// func_access.push(AFinal);
+					return null;
 				}
 
 				// We need to skip overriding functions which are inline.
@@ -740,7 +751,7 @@ class HScriptedClassMacro
 						switch (k)
 						{
 							case MethNormal: // Do nothing.
-							default: return [];
+							default: return null;
 						}
 					/*
 					case FMethod(k):
@@ -748,17 +759,18 @@ class HScriptedClassMacro
 						{
 							case MethInline:
 								// Context.info('  Skipping: "${field.name}" is inline function', Context.currentPos());
-								return [];
+								return null;
 							case MethDynamic:
 								// Context.info('  Skipping: "${field.name}" is dynamic function', Context.currentPos());
-								return [];
+								return null;
 							case MethMacro:
 								// Context.info('  Skipping: "${field.name}" is macro function', Context.currentPos());
-								return [];
+								return null;
 							default: // Do nothing.
 						}
 					*/
-					default: // Do nothing.
+					default:
+						return null;
 				}
 
 				// Skip overriding functions which are Generics.
@@ -769,7 +781,7 @@ class HScriptedClassMacro
 					if (fieldMeta.name == ':generic')
 					{
 						// Context.info('  Skipping: "${field.name}" is marked with @:generic', Context.currentPos());
-						return [];
+						return null;
 					}
 				}
 
@@ -778,14 +790,12 @@ class HScriptedClassMacro
 				if (field == null || field.expr() == null)
 				{
 					// Context.info('  Skipping: "${field.name}" is not an expression', Context.currentPos());
-					return [];
+					return null;
 				}
 
 				var func_inputArgs:Array<FunctionArg> = [];
 
 				var func_access = [AOverride];
-				if (field.isFinal)
-					func_access.push(AFinal);
 				if (field.isPublic)
 				{
 					func_access.push(APublic);
@@ -821,7 +831,7 @@ class HScriptedClassMacro
 						// Okay, so uh, this is actually a VARIABLE storing a function.
 						// Don't attempt to re-define it.
 
-						return [];
+						return null;
 					default:
 						Context.warning('Expected a function and got ${field.expr().expr}', Context.currentPos());
 				}
@@ -858,14 +868,13 @@ class HScriptedClassMacro
 						{
 							if (_asc != null)
 							{
-								var fieldName:String = $v{funcName};
-								// trace('ASC: Calling $fieldName() in macro-generated function...');
+								// trace('ASC: Calling $v{funcName}() in macro-generated function...');
 								$
 								{
 									doesReturnVoid ? (
-										macro _asc.callFunction(fieldName, [$a{func_callArgs}])
+										macro _asc.callFunction($v{funcName}, [$a{func_callArgs}])
 									) : (
-										macro return _asc.callFunction(fieldName, [$a{func_callArgs}])
+										macro return _asc.callFunction($v{funcName}, [$a{func_callArgs}])
 									)
 								}
 							}
@@ -922,28 +931,28 @@ class HScriptedClassMacro
 				// However, since scripted classes correctly access the superclass variables anyway,
 				// there is no need to override the value.
 				// Context.info('Field: Instance variable "${field.name}"', Context.currentPos());
-				return [];
+				return null;
 			case TEnum(_t, _params):
 				// Enum instance
 				// Context.info('Field: Enum variable "${field.name}"', Context.currentPos());
-				return [];
+				return null;
 			case TMono(_t):
 				// Monomorph instance
 				// https://haxe.org/manual/types-monomorph.html
 				// Context.info('Field: Monomorph variable "${field.name}"', Context.currentPos());
-				return [];
+				return null;
 			case TAnonymous(_t):
 				// Context.info('Field: Anonymous variable "${field.name}"', Context.currentPos());
-				return [];
+				return null;
 			case TDynamic(_t):
 				// Context.info('Field: Dynamic variable "${field.name}"', Context.currentPos());
-				return [];
+				return null;
 			case TAbstract(_t, _params):
 				// Context.info('Field: Abstract variable "${field.name}"', Context.currentPos());
-				return [];
+				return null;
 			default:
 				// Context.info('Unknown field type: ${field}', Context.currentPos());
-				return [];
+				return null;
 		}
 	}
 
