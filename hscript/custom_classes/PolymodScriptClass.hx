@@ -58,6 +58,7 @@ class PolymodScriptClass
 	public function new(ogInterp:Interp, name:String, fields:Array<Expr>, ?extend:String, ?interfaces:Array<String>, ?args:Array<Dynamic>)
 	{
 		_parentInterp = ogInterp;
+		superConstructor = Reflect.makeVarArgs(createSuperClass);
 		this.name = name;
 		this.fields = fields;
 		this.cl = extend == null ? TemplateClass : Type.resolveClass('${extend}_HSX');
@@ -103,9 +104,16 @@ class PolymodScriptClass
 			_interp.importFailedCallback = _parentInterp.importFailedCallback;
 			_interp.onMetadata = _parentInterp.onMetadata;
 			_interp.staticVariables = _parentInterp.staticVariables;
+			#if hscriptPos
+			_interp.variables.set("trace", UnsafeReflect.makeVarArgs(function(el) {
+				var oldExpr = _parentInterp.curExpr;
+				var curExpr = _interp.curExpr;
+				_parentInterp.curExpr = curExpr;
+				UnsafeReflect.callMethod(null, _parentInterp.variables.get("trace"), el);
+				_parentInterp.curExpr = oldExpr;
+			}));
+			#end
 		}
-		// buildCaches();
-		_interp.variables.remove("trace");
 
 		if (fields != null)
 		{
@@ -114,7 +122,7 @@ class PolymodScriptClass
 			// fields = null;
 		}
 
-		if (findField("new") != null)
+		if (findFunction("new") != null)
 		{
 			callFunction("new", args);
 			/*
@@ -123,14 +131,15 @@ class PolymodScriptClass
 				// _interp.errorEx(EClassSuperNotCalled);
 			}
 			*/
+			if (_interp.scriptObject == null)
+				_interp.scriptObject = superClass;
 		}
 		else
 		{
 			createSuperClass(args);
 		}
-		trace(superClass);
-		trace(Type.getClassName(Type.getClass(superClass)));
-		_interp.scriptObject = superClass;
+		// trace(superClass);
+		// trace(Type.getClassName(Type.getClass(superClass)));
 		return superClass;
 	}
 
@@ -143,7 +152,8 @@ class PolymodScriptClass
 		// UnsafeReflect.hasField(this, name) is REALLY expensive so we use a cache.
 		if (__superClassFieldList == null)
 		{
-			__superClassFieldList = Type.getInstanceFields(Type.getClass(superClass));
+			__superClassFieldList = Type.getInstanceFields(cl);
+			// __superClassFieldList = Type.getInstanceFields(cl).filter(str -> return str.indexOf("__hsx_super_") != 0);
 		}
 		return __superClassFieldList.indexOf(name) != -1;
 	}
@@ -154,12 +164,6 @@ class PolymodScriptClass
 		{
 			args = [];
 		}
-		if (extend == null)
-		{
-			superClass = Type.createInstance(cl, args);
-			return;
-		}
-
 		// var fullExtendString = '${extend}_HSX';
 
 		// Build an unqualified path too.
@@ -174,24 +178,33 @@ class PolymodScriptClass
 		{
 			superClass = Type.createInstance(cl, args);
 		}
+		// trace(Type.getClass(superClass));
+		// trace(Type.typeof(superClass));
+		_interp.scriptObject = superClass;
+		__superClassFieldList = _interp.__instanceFields;
+		return superClass;
 	}
 
+	var _nextIsSuper:Bool = false;
 	@:privateAccess(hscript.Interp)
 	public function callFunction(fnName:String, args:Array<Dynamic> = null):Dynamic
 	{
 		// trace(fnName); for (i in CallStack.callStack()) trace(Std.string(i));
 		// Force call super function.
-		// trace(fnName);
-		var func:haxe.Constraints.Function = _interp.variables.get(fnName);
-		if (func == null && (func = _interp.publicVariables.get(fnName)) == null)
+		var func:haxe.Constraints.Function = _nextIsSuper ? null : findFunction(fnName);
+		if (func == null && superClass != null)
 		{
-			for (i => a in args)
-			{
-				if (Std.isOfType(a, PolymodScriptClass))
-					args[i] = cast(a, PolymodScriptClass).superClass;
-			}
-			func =  superClass == null ? null : _interp.get(superClass, "__hsx_super_" + fnName);
+			if (args != null)
+				for (i => a in args)
+				{
+					if (Std.isOfType(a, PolymodScriptClass))
+						args[i] = cast(a, PolymodScriptClass).superClass;
+				}
+			func = UnsafeReflect.field(superClass, "__hsx_super_" + fnName);
 		}
+		_nextIsSuper = false;
+		// trace("call " + fnName);
+		// trace(func != null);
 		// return func == null ? null : _interp.callThis(func, args);
 		return func == null ? null : _interp.call(superClass, func, args);
 		/*
@@ -301,7 +314,9 @@ class PolymodScriptClass
 		return name;
 	}
 	*/
+	var superConstructor:Dynamic = null;
 
+	/*
 	private function superConstructor(arg0:Dynamic = Unused, arg1:Dynamic = Unused, arg2:Dynamic = Unused, arg3:Dynamic = Unused)
 	{
 		var args = [];
@@ -313,8 +328,9 @@ class PolymodScriptClass
 			args.push(arg2);
 		if (arg3 != Unused)
 			args.push(arg3);
-		createSuperClass(args);
+		return createSuperClass(args);
 	}
+	*/
 
 	/**
 	 * Search for a function field with the given name.
@@ -324,8 +340,8 @@ class PolymodScriptClass
 	 */
 	private function findFunction(name:String, cacheOnly:Bool = true):haxe.Constraints.Function
 	{
-		var func:haxe.Constraints.Function = null;
-		if ((func = _interp.variables.get(name)) == null)
+		var func:haxe.Constraints.Function = _interp.variables.get(name);
+		if (func == null)
 			func = _interp.publicVariables.get(name);
 		return func;
 	}
@@ -344,12 +360,13 @@ class PolymodScriptClass
 
 	public function get(name:String):Dynamic
 	{
-		switch (name)
+		name = StringTools.trim(name);
+		switch name
 		{
-			case "superClass":		  return this.superClass;
-			case "createSuperClass":  return this.createSuperClass;
-			case "findFunction":	  return this.findFunction;
-			case "callFunction":	  return this.callFunction;
+			case "superClass":			 return this.superClass;
+			case "createSuperClass":	 return this.createSuperClass;
+			case "findFunction":		 return this.findFunction;
+			case "callFunction":		 return this.callFunction;
 			case _:
 				/*
 				var varDecl:VarDecl = findVar(name);
@@ -370,8 +387,34 @@ class PolymodScriptClass
 					return varValue;
 				}
 				*/
-				var expr = _interp.resolve(name, _parentInterp == null, true);
-				return expr == null && _parentInterp != null ? _parentInterp.variables.get(name) : expr;
+
+				/*
+				var expr = _interp.publicVariables.get(name);
+				if (expr == null && (expr = _interp.variables.get(name)) == null && superHasField(name))
+					expr = UnsafeReflect.getProperty(superClass, name);
+				return expr;
+				*/
+
+				var expr = findField(name);
+				if (expr == null)
+				{
+					if (superClass != null && (expr = findSuperVar(name)) != null)
+						return expr;
+					/*
+					if (_proxy.superHasField(id))
+					{
+						// _nextCallObject = _proxy.superClass;
+						return UnsafeReflect.getProperty(_proxy.superClass, id);
+					}
+					*/
+					// trace(id);
+					if (_parentInterp != null)
+					{
+						return _parentInterp.resolve(name, false, false);
+					}
+				}
+				return expr;
+
 				/*
 				if (_interp.varExists(name))
 				{
@@ -411,6 +454,25 @@ class PolymodScriptClass
 		return null;
 	}
 
+	public function set(name:String, value:Dynamic):Dynamic
+	{
+		// switch (name)
+		// {
+		// 	case name:
+				if (_interp.variables.exists(name))
+				{
+					_interp.variables.set(name, value);
+					return value;
+				}
+				else if (_interp.publicVariables.exists(name))
+				{
+					_interp.publicVariables.set(name, value);
+					return value;
+				}
+				return setSuperVar(name, value);
+		// }
+	}
+
 	/**
 	 * Search for a variable field with the given name.
 	 * @param name The name of the variable to search for.
@@ -424,6 +486,32 @@ class PolymodScriptClass
 			v = _interp.publicVariables.get(name);
 		return v;
 	}
+	private function findSuperVar(name:String):Dynamic
+	{
+		if (superHasField(name)) {
+			// if(_interp.isBypassAccessor) {
+			// 	return UnsafeReflect.field(superClass, name);
+			// } else {
+				return UnsafeReflect.getProperty(superClass, name);
+			// }
+		} else if (superHasField('get_$name')) { // getter
+			return UnsafeReflect.getProperty(superClass, 'get_$name')();
+		}
+		return null;
+	}
+	private function setSuperVar(name:String, value:Dynamic):Dynamic
+	{
+		if (superHasField(name))
+		{
+			UnsafeReflect.setProperty(superClass, name, value);
+			return value;
+		}
+		else if (superHasField('set_$name'))
+		{
+			return UnsafeReflect.field(superClass, 'set_$name')(value);
+		}
+		return value;
+	}
 
 	/**
 	 * Search for a field (function OR variable) with the given name.
@@ -433,7 +521,11 @@ class PolymodScriptClass
 	 */
 	private function findField(name:String, cacheOnly:Bool = true):Dynamic
 	{
-		return _interp.resolve(name, false, false);
+		if (_interp.variables.exists(name))
+			return _interp.variables.get(name);
+		if (_interp.publicVariables.exists(name))
+			return _interp.publicVariables.get(name);
+		return null;
 	}
 
 	public function listFunctions():Map<String, FunctionDecl>
@@ -474,7 +566,6 @@ class PolymodScriptClass
 
 class TemplateClassBase {
 	public function new() { }
-	public function toString() return "";
 }
 @:hscriptClass
 class TemplateClass extends TemplateClassBase implements hscript.HScriptedClass { } // TODO: Allow made hscriptedClass for non extenden class

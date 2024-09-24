@@ -127,16 +127,22 @@ abstract PolymodAbstractScriptClass(PolymodScriptClass) from PolymodScriptClass
 		switch (name)
 		{
 			case _:
-				if (this.findVar(name) != null)
+				if (this._interp.variables.exists(name))
 				{
 					this._interp.variables.set(name, value);
 					return value;
 				}
-				else if (Reflect.hasField(this.superClass, name))
+				else if (this._interp.publicVariables.exists(name))
+				{
+					this._interp.publicVariables.set(name, value);
+					return value;
+				}
+				else if (this.superHasField(name))
 				{
 					Reflect.setProperty(this.superClass, name, value);
 					return value;
 				}
+				/*
 				else if (this.superClass != null && Std.isOfType(this.superClass, PolymodScriptClass))
 				{
 					var superScriptClass:PolymodAbstractScriptClass = cast(this.superClass, PolymodScriptClass);
@@ -148,6 +154,7 @@ abstract PolymodAbstractScriptClass(PolymodScriptClass) from PolymodScriptClass
 					{
 					}
 				}
+				*/
 		}
 
 		if (this.superClass == null)

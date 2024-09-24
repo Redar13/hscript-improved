@@ -203,18 +203,16 @@ class HScriptedClassMacro
 				ret: Context.toComplexType(Context.getType(clsTypeName)),
 				expr: macro
 				{
-					trace('do something ($clsName)');
+					// trace('  Init $clsName class');
 					var asc:hscript.custom_classes.PolymodAbstractScriptClass = hscript.custom_classes.PolymodScriptClass.createScriptClassInstance(clsName, interp, args);
 					if (asc == null)
 					{
-						trace("fail");
+						// trace('  Failed init $clsName class');
 						// polymod.Polymod.error(SCRIPT_RUNTIME_EXCEPTION, 'Could not construct instance of scripted class (${clsName} extends ' + $v{clsTypeName} + ')');
 						return null;
 					}
 					var scriptedObj = asc.superClass;
-
 					Reflect.setField(scriptedObj, "_asc", asc);
-
 					return scriptedObj;
 				},
 			}),
@@ -223,9 +221,6 @@ class HScriptedClassMacro
 
 	static function buildScriptedClassUtils(cls:ClassType, superCls:ClassType):Array<Field>
 	{
-		var clsTypeName:String = cls.pack.join('.') != '' ? '${cls.pack.join('.')}.${cls.name}' : cls.name;
-		var superClsTypeName:String = superCls.pack.join('.') != '' ? '${superCls.pack.join('.')}.${superCls.name}' : superCls.name;
-
 		var function_scriptGet:Field = {
 			name: 'scriptGet',
 			doc: 'Retrieves the value of a local variable of a scripted class.',
