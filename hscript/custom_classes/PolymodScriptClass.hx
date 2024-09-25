@@ -55,13 +55,13 @@ class PolymodScriptClass
 	/**
 	 * INSTANCE METHODS
 	 */
-	public function new(ogInterp:Interp, name:String, fields:Array<Expr>, ?extend:String, ?interfaces:Array<String>, ?args:Array<Dynamic>)
+	public function new(ogInterp:Interp, name:String, fields:Array<Expr>, ?extend:Class<Dynamic>, ?interfaces:Array<String>, ?args:Array<Dynamic>)
 	{
 		_parentInterp = ogInterp;
 		superConstructor = Reflect.makeVarArgs(createSuperClass);
 		this.name = name;
 		this.fields = fields;
-		this.cl = extend == null ? TemplateClass : Type.resolveClass('${extend}_HSX');
+		this.cl = extend == null ? TemplateClass : extend;
 		callNew(args);
 	}
 	/*
@@ -132,7 +132,11 @@ class PolymodScriptClass
 			}
 			*/
 			if (_interp.scriptObject == null)
+			{
+				UnsafeReflect.setField(superClass, "_asc", this);
 				_interp.scriptObject = superClass;
+				__superClassFieldList = _interp.__instanceFields;
+			}
 		}
 		else
 		{
@@ -158,12 +162,12 @@ class PolymodScriptClass
 		return __superClassFieldList.indexOf(name) != -1;
 	}
 
-	private function createSuperClass(args:Array<Dynamic> = null)
+	private function createSuperClass(args:Array<Dynamic>)
 	{
-		if (args == null)
-		{
-			args = [];
-		}
+		// if (args == null)
+		// {
+		// 	args = [];
+		// }
 		// var fullExtendString = '${extend}_HSX';
 
 		// Build an unqualified path too.
@@ -180,6 +184,7 @@ class PolymodScriptClass
 		}
 		// trace(Type.getClass(superClass));
 		// trace(Type.typeof(superClass));
+		UnsafeReflect.setField(superClass, "_asc", this);
 		_interp.scriptObject = superClass;
 		__superClassFieldList = _interp.__instanceFields;
 		return superClass;
@@ -206,7 +211,7 @@ class PolymodScriptClass
 		// trace("call " + fnName);
 		// trace(func != null);
 		// return func == null ? null : _interp.callThis(func, args);
-		return func == null ? null : _interp.call(superClass, func, args);
+		return func == null ? null : _interp.call(null, func, args);
 		/*
 		var field = findField(fnName);
 		var r:Dynamic = null;

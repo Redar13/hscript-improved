@@ -449,11 +449,11 @@ class Interp {
 				}
 				// TODO
 			case EField(e, f, s):
-				if (Tools.expr(e).match(EIdent("this")) && _proxy != null && _proxy.superClass !=null && _proxy.superHasField(f))
-				{
-					UnsafeReflect.setProperty(_proxy.superClass, f, v);
-					return v;
-				}
+				// if (Tools.expr(e).match(EIdent("this")) && _proxy != null && _proxy.superClass !=null && _proxy.superHasField(f))
+				// {
+				// 	UnsafeReflect.setProperty(_proxy.superClass, f, v);
+				// 	return v;
+				// }
 				// TODO: Fix bug with assign after "trace(this)" and not
 				var obj = expr(e);
 				if(s && obj == null) return null;
@@ -1594,12 +1594,12 @@ class Interp {
 		switch (customClasses.get(className))
 		{
 			case EClass(className, fields, extend, interfaces):
-				function importVar(thing:String):String
+				function importVar(thing:String):Class<Dynamic>
 				{
 					if (thing == null)
 						return null;
 					final variable:Class<Dynamic> = customClasses.exists(thing) ? null : resolve(thing, false);
-					return variable == null ? thing : Type.getClassName(variable);
+					return variable == null ? null : Type.resolveClass('${Type.getClassName(variable)}_HSX');
 				}
 				return new PolymodScriptClass(
 							this, className, fields, importVar(extend),

@@ -26,14 +26,15 @@ class UsingHandler {
 		if (clRef == null) return fields;
 		var cl = clRef.get();
 
-		if (/* cl.name.startsWith("Flx") && */ cl.name.endsWith("_Impl_") && cl.params.length <= 0 && !cl.meta.has(":multiType") && !cl.name.contains("_HSC")) {
-			var metas = cl.meta.get();
-
+		if (cl.name.endsWith("_Impl_") && cl.params.length <= 0 && !cl.meta.has(":multiType") && !cl.name.contains("_HSC")) {
 			var trimEnum = cl.name.substr(0, cl.name.length - 6);
 
 			var key = cl.module;
 			var fkey = key + "." + trimEnum;
 			if(key.contains("_")) return fields; // Weird issue, sorry
+			for (i in Config.DISALLOW_ABSTRACT_AND_ENUM)
+				if(fkey.startsWith(i) || key.startsWith(i))
+					return fields;
 			switch (key)
 			{
 				case "lime.system.Locale" // Error: Unknown identifier : currentLocale, Due to Func
@@ -45,9 +46,6 @@ class UsingHandler {
 					| "cpp.CharStar": // Error: cannot initialize a variable of type 'char *' with an rvalue of type 'const char *', Due to Func
 						return fields;
 			}
-			for (i in Config.DISALLOW_ABSTRACT_AND_ENUM)
-				if(fkey.startsWith(i) || key.startsWith(i))
-					return fields;
 
 			var shadowClass = macro class { };
 			shadowClass.kind = TDClass();

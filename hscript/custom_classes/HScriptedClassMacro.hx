@@ -211,9 +211,7 @@ class HScriptedClassMacro
 						// polymod.Polymod.error(SCRIPT_RUNTIME_EXCEPTION, 'Could not construct instance of scripted class (${clsName} extends ' + $v{clsTypeName} + ')');
 						return null;
 					}
-					var scriptedObj = asc.superClass;
-					Reflect.setField(scriptedObj, "_asc", asc);
-					return scriptedObj;
+					return asc.superClass;
 				},
 			}),
 		};
@@ -743,6 +741,9 @@ class HScriptedClassMacro
 					return null;
 				}
 
+				if (!field.kind.match(FMethod(MethNormal)))
+					return null;
+				/*
 				// We need to skip overriding functions which are inline.
 				// Normal Haxe classes can't override these functions anyway, so we can skip them.
 				switch (field.kind)
@@ -753,6 +754,7 @@ class HScriptedClassMacro
 							case MethNormal: // Do nothing.
 							default: return null;
 						}
+				*/
 					/*
 					case FMethod(k):
 						switch (k)
@@ -769,13 +771,16 @@ class HScriptedClassMacro
 							default: // Do nothing.
 						}
 					*/
+				/*
 					default:
 						return null;
 				}
+				*/
 
 				// Skip overriding functions which are Generics.
 				// This is because this actually creates several different functions at compile time.
 				// TODO: Can we somehow override these functions?
+				// trace(field.name);
 				for (fieldMeta in field.meta.get())
 				{
 					if (fieldMeta.name == ':generic')
