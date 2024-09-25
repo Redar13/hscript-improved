@@ -21,7 +21,7 @@ class ClassExtendMacro {
 	public static inline final FUNC_PREFIX = "_HX_SUPER__";
 	public static inline final CLASS_SUFFIX = "_HSX";
 
-	public static var unallowedMetas:Array<String> = [":hscriptClassPreProcessed", ":structInit", ":bitmap", ":noCustomClass", ":generic"];
+	public static var unallowedMetas:Array<String> = [":hscriptClassPreProcessed", ":structInit", ":bitmap", ":noCustomClass", ":generic", "hscriptClassPreProcessed", ":hscriptClass"];
 
 	public static var modifiedClasses:Array<String> = [];
 
