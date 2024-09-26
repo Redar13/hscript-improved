@@ -36,6 +36,7 @@ class ClassExtendMacro {
 		#end
 	}
 
+	// TODO?: Check if the class is completely written.
 	public static function build():Array<Field> {
 		var fields = Context.getBuildFields();
 		var clRef = Context.getLocalClass();

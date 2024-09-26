@@ -1635,12 +1635,12 @@ class Parser {
 	}
 
 	function token():Token {
+
+		#if hscriptPos
 		//function ttrace(v:Dynamic, ?infos : Null<haxe.PosInfos>) {
 		//	Sys.print(infos.fileName+":"+infos.lineNumber+": " + Std.string(v));
 		//	Sys.print("\r\n");
 		//}
-
-		#if hscriptPos
 		var t = tokens.pop();
 		if( t != null ) {
 			tokenMin = t.min;
@@ -1852,7 +1852,7 @@ class Parser {
 					 */
 					var e = new Array();
 					return TConst( CString(readString(char)) );
-				case '"'.code:return TConst( CString(readString(char)) );
+				case '"'.code: return TConst( CString(readString(char)) );
 				case "?".code:
 					char = readChar();
 					switch (char) {

@@ -111,9 +111,8 @@ class HScriptedClassMacro
 			{
 				if (superCls.constructor != null)
 				{
-					var superClsConstType:Type = superCls.constructor.get().type;
 					// Context.follow(superCls.constructor.get().type);
-					switch (superClsConstType)
+					switch (superCls.constructor.get().type)
 					{
 						case TFun(args, ret):
 							// Build a new constructor, which has the same signature as the superclass constructor.
@@ -125,8 +124,7 @@ class HScriptedClassMacro
 							fields.push(initField);
 							// constructor = buildScriptedClassConstructor(constArgs);
 						case TLazy(builder):
-							var builtValue = builder();
-							switch (builtValue)
+							switch (builder())
 							{
 								case TFun(args, ret):
 									// Build a new constructor, which has the same signature as the superclass constructor.
@@ -137,10 +135,10 @@ class HScriptedClassMacro
 									var initField:Field = buildScriptedClassInit(cls, superCls, []);
 									fields.push(initField);
 									// constructor = buildScriptedClassConstructor(constArgs);
-								default:
+								case builtValue:
 									Context.error('Error: Lazy superclass constructor is not a function (got ${builtValue})', Context.currentPos());
 							}
-						default:
+						case superClsConstType:
 							Context.error('Error: super constructor is not a function (got ${superClsConstType})', Context.currentPos());
 					}
 				}
@@ -319,9 +317,12 @@ class HScriptedClassMacro
 		var tClass = Context.toComplexType(tType);
 
 		// Start with a custom implementation of .toString()
-		var func_toString:haxe.macro.Expr.Field = buildScriptedClass_toString(targetClass);
+		var func_toString:Array<Field> = buildScriptedClass_toString(targetClass);
 		if (func_toString != null)
-			fieldArray.push(func_toString);
+		{
+			for (i in func_toString)
+				fieldArray.push(i);
+		}
 		fieldDone.push('toString');
 
 		while (targetClass != null && (targetClass.params == null || targetClass.params.length == 0))
@@ -371,7 +372,7 @@ class HScriptedClassMacro
 		return fieldArray;
 	}
 
-	static function buildScriptedClass_toString(cls:ClassType):Field
+	static function buildScriptedClass_toString(cls:ClassType):Array<Field>
 	{
 		var oldToString = cls.fields.get().find(i -> return i.name == "toString");
 		var _tempSuperCl = cls;
@@ -386,7 +387,33 @@ class HScriptedClassMacro
 		if (oldToString != null)
 			access.push(AOverride);
 
-		return {
+		var funcs = [{
+			name: '__hsx_super_to_string_', // huh, "__hsx_super_toString" is like a duplicate field
+			doc: null,
+			access: [APrivate],
+			meta: null,
+			pos: cls.pos,
+			kind: FFun({
+				args: [],
+				params: null,
+				ret: Context.toComplexType(Context.getType('String')),
+				expr: macro
+				{
+					$
+					{
+						if (oldToString != null)
+						(
+							macro return super.toString()
+						)
+						else
+						(
+							macro return $v{cls.name}
+						)
+					}
+				},
+			}),
+		},
+		{
 			name: 'toString',
 			doc: null,
 			access: access,
@@ -401,17 +428,7 @@ class HScriptedClassMacro
 					// trace("toString");
 					if (_asc == null)
 					{
-						$
-						{
-							if (oldToString != null)
-							(
-								macro return super.toString()
-							)
-							else
-							(
-								macro return $v{cls.name}
-							)
-						}
+						return this.__hsx_super_to_string_();
 					}
 					else
 					{
@@ -419,7 +436,9 @@ class HScriptedClassMacro
 					}
 				},
 			}),
-		};
+		}];
+
+		return funcs;
 	}
 
 	static function buildScriptedClassFieldOverrides_inner(cls:ClassType, targetParams:Map<String, Type>):Map<String, Dynamic>
@@ -490,7 +509,7 @@ class HScriptedClassMacro
 			// case TFun(args:Array<{name:String, opt:Bool, t:Type}>, ret:Type):
 			// case TAnonymous(a:Ref<AnonType>):
 			default:
-				Context.error('Unsupported type: ${parentType}', Context.currentPos());
+				Context.error('Unsupported type: $parentType', Context.currentPos());
 		}
 
 		var result:Array<TypeParameter> = [];
@@ -783,7 +802,7 @@ class HScriptedClassMacro
 				// trace(field.name);
 				for (fieldMeta in field.meta.get())
 				{
-					if (fieldMeta.name == ':generic')
+					if (fieldMeta.name == ":generic")
 					{
 						// Context.info('  Skipping: "${field.name}" is marked with @:generic', Context.currentPos());
 						return null;
@@ -871,19 +890,7 @@ class HScriptedClassMacro
 						// ret: func_ret,
 						expr: macro
 						{
-							if (_asc != null)
-							{
-								// trace('ASC: Calling $v{funcName}() in macro-generated function...');
-								$
-								{
-									doesReturnVoid ? (
-										macro _asc.callFunction($v{funcName}, [$a{func_callArgs}])
-									) : (
-										macro return _asc.callFunction($v{funcName}, [$a{func_callArgs}])
-									)
-								}
-							}
-							else
+							if (_asc == null)
 							{
 								// Fallback, call the original function.
 								$
@@ -895,11 +902,23 @@ class HScriptedClassMacro
 									)
 								}
 							}
+							else
+							{
+								// trace('ASC: Calling $v{funcName}() in macro-generated function...');
+								$
+								{
+									doesReturnVoid ? (
+										macro _asc.callFunction($v{funcName}, [$a{func_callArgs}])
+									) : (
+										macro return _asc.callFunction($v{funcName}, [$a{func_callArgs}])
+									)
+								}
+							}
 						},
 					}),
 				};
 				var func_superCall:Field = {
-					name: '__hsx_super_' + funcName,
+					name: "__hsx_super_" + funcName,
 					doc: 'Calls the original ${field.name} function while ignoring the ScriptedClass override.',
 					access: [APrivate],
 					meta: field.meta.get(),

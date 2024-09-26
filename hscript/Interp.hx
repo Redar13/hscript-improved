@@ -92,49 +92,52 @@ class Interp {
 	private var _hasScriptObject(default, null):Bool = false;
 	private var _scriptObjectType(default, null):ScriptObjectType = SNull;
 	public function set_scriptObject(v:Dynamic) {
-		if(Std.isOfType(v, HScriptedClass)) {
-			__instanceFields = Type.getInstanceFields(Type.getClass(v));
-			// __instanceFields = Type.getInstanceFields(Type.getClass(v)).filter(str -> return str.indexOf("__hsx_super_") != 0);
-			// __instanceFields = Type.getInstanceFields(Reflect.field(cast(v, HScriptedClass), "_asc."))
-			// var v = cast(v, HScriptedClass);
-			// var classFields = v.__class__fields;
-			// if(classFields != null)
-			// 	__instanceFields = __instanceFields.concat(classFields);
-			_scriptObjectType = SCustomClass;
-		} else {
-			switch(Type.typeof(v)) {
-				case TClass(c): // Class Access
-					__instanceFields = Type.getInstanceFields(c);
-					if(Std.isOfType(c, IHScriptCustomBehaviour)) {
-						_scriptObjectType = SBehaviourClass;
-					} else {
-						_scriptObjectType = SClass;
-					}
-				case TObject: // Object Access or Static Class Access
-					var cls = Type.getClass(v);
-					switch(Type.typeof(cls)) {
-						case TClass(c): // Static Class Access
-							if(Std.isOfType(c, HScriptedClass)) {
-								__instanceFields = Type.getInstanceFields(c);
-								// __instanceFields = Type.getInstanceFields(c).filter(str -> return str.indexOf("__hsx_super_") != 0);
-								// __instanceFields = Type.getInstanceFields(Reflect.field(cast(v, HScriptedClass), "_asc."))
-								// var v = cast(v, HScriptedClass);
-								// var classFields = v.__class__fields;
-								// if(classFields != null)
-								// 	__instanceFields = __instanceFields.concat(classFields);
-								_scriptObjectType = SCustomClass;
-							} else {
-								__instanceFields = Type.getInstanceFields(c);
-								_scriptObjectType = SStaticClass;
-							}
-						default: // Object Access
-							__instanceFields = UnsafeReflect.fields(v);
-							_scriptObjectType = SObject;
-					}
-				default: // Null or other
-					__instanceFields = [];
-					_scriptObjectType = SNull;
-			}
+		switch(Type.typeof(v)) {
+			case TClass(c): // Class Access
+				__instanceFields = Type.getInstanceFields(c);
+				if(Std.isOfType(v, HScriptedClass)) {
+					__instanceFields = __instanceFields.filter(str -> return str.indexOf("__hsx_super_") != 0);
+					if (_proxy != null)
+						_proxy.__superClassFieldList = __instanceFields;
+					// __instanceFields.remove("_asc");
+
+					// __instanceFields = Type.getInstanceFields(Reflect.field(cast(v, HScriptedClass), "_asc."))
+					// var v = cast(v, HScriptedClass);
+					// var classFields = v.__class__fields;
+					// if(classFields != null)
+					// 	__instanceFields = __instanceFields.concat(classFields);
+					_scriptObjectType = SCustomClass;
+				} else if(Std.isOfType(c, IHScriptCustomBehaviour)) {
+					_scriptObjectType = SBehaviourClass;
+				} else {
+					_scriptObjectType = SClass;
+				}
+			case TObject: // Object Access or Static Class Access
+				var cls = Type.getClass(v);
+				switch(Type.typeof(cls)) {
+					case TClass(c): // Static Class Access
+						__instanceFields = Type.getInstanceFields(c);
+						if(Std.isOfType(c, HScriptedClass)) {
+							__instanceFields = __instanceFields.filter(str -> return str.indexOf("__hsx_super_") != 0);
+							if (_proxy != null)
+								_proxy.__superClassFieldList = __instanceFields;
+							// __instanceFields = Type.getInstanceFields(c).filter(str -> return str.indexOf("__hsx_super_") != 0);
+							// __instanceFields = Type.getInstanceFields(Reflect.field(cast(v, HScriptedClass), "_asc."))
+							// var v = cast(v, HScriptedClass);
+							// var classFields = v.__class__fields;
+							// if(classFields != null)
+							// 	__instanceFields = __instanceFields.concat(classFields);
+							_scriptObjectType = SCustomClass;
+						} else {
+							_scriptObjectType = SStaticClass;
+						}
+					default: // Object Access
+						__instanceFields = UnsafeReflect.fields(v);
+						_scriptObjectType = SObject;
+				}
+			default: // Null or other
+				__instanceFields = [];
+				_scriptObjectType = SNull;
 		}
 		// trace(_scriptObjectType);
 		// trace(__instanceFields);
@@ -702,8 +705,8 @@ class Interp {
 		id = StringTools.trim(id);
 		if (id == "super" && _proxy != null)
 		{
-			_proxy._nextIsSuper = true;
-			return _proxy.superClass == null ? _proxy.superConstructor : _proxy.superClass;
+			_proxy._nextIsSuper = _proxy.superClass != null;
+			return _proxy._nextIsSuper ? _proxy.superClass : _proxy.superConstructor;
 		}
 		if (locals.exists(id))
 			return locals.get(id).r;

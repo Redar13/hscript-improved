@@ -1,12 +1,12 @@
 package hscript.custom_classes;
 
 import haxe.CallStack;
-import haxe.macro.Expr.Catch;
-import hscript.custom_classes.PolymodClassDeclEx;
+import haxe.Constraints.Function;
 import hscript.Expr;
-import hscript.Printer;
 import hscript.Interp;
+import hscript.Printer;
 import hscript.UnsafeReflect;
+import hscript.custom_classes.PolymodClassDeclEx;
 
 using StringTools;
 
@@ -135,7 +135,6 @@ class PolymodScriptClass
 			{
 				UnsafeReflect.setField(superClass, "_asc", this);
 				_interp.scriptObject = superClass;
-				__superClassFieldList = _interp.__instanceFields;
 			}
 		}
 		else
@@ -156,7 +155,7 @@ class PolymodScriptClass
 		// UnsafeReflect.hasField(this, name) is REALLY expensive so we use a cache.
 		if (__superClassFieldList == null)
 		{
-			__superClassFieldList = Type.getInstanceFields(cl);
+			__superClassFieldList = _interp.__instanceFields;
 			// __superClassFieldList = Type.getInstanceFields(cl).filter(str -> return str.indexOf("__hsx_super_") != 0);
 		}
 		return __superClassFieldList.indexOf(name) != -1;
@@ -186,7 +185,6 @@ class PolymodScriptClass
 		// trace(Type.typeof(superClass));
 		UnsafeReflect.setField(superClass, "_asc", this);
 		_interp.scriptObject = superClass;
-		__superClassFieldList = _interp.__instanceFields;
 		return superClass;
 	}
 
@@ -196,22 +194,22 @@ class PolymodScriptClass
 	{
 		// trace(fnName); for (i in CallStack.callStack()) trace(Std.string(i));
 		// Force call super function.
-		var func:haxe.Constraints.Function = _nextIsSuper ? null : findFunction(fnName);
+		var func:Function = _nextIsSuper ? null : findFunction(fnName);
 		if (func == null && superClass != null)
 		{
-			if (args != null)
-				for (i => a in args)
-				{
-					if (Std.isOfType(a, PolymodScriptClass))
-						args[i] = cast(a, PolymodScriptClass).superClass;
-				}
-			func = UnsafeReflect.field(superClass, "__hsx_super_" + fnName);
+			// if (args != null)
+			// 	for (i => a in args)
+			// 	{
+			// 		if (Std.isOfType(a, PolymodScriptClass))
+			// 			args[i] = cast(a, PolymodScriptClass).superClass;
+			// 	}
+			func = UnsafeReflect.field(superClass, fnName == "toString" ? "__hsx_super_to_string_" : "__hsx_super_" + fnName);
 		}
 		_nextIsSuper = false;
 		// trace("call " + fnName);
 		// trace(func != null);
 		// return func == null ? null : _interp.callThis(func, args);
-		return func == null ? null : _interp.call(null, func, args);
+		return func == null ? null : _interp.call(superClass, func, args);
 		/*
 		var field = findField(fnName);
 		var r:Dynamic = null;
@@ -319,8 +317,8 @@ class PolymodScriptClass
 		return name;
 	}
 	*/
-	var superConstructor:Dynamic = null;
 
+	var superConstructor:Dynamic = null;
 	/*
 	private function superConstructor(arg0:Dynamic = Unused, arg1:Dynamic = Unused, arg2:Dynamic = Unused, arg3:Dynamic = Unused)
 	{
@@ -343,9 +341,9 @@ class PolymodScriptClass
 	 * @param cacheOnly If false, scan the full list of fields.
 	 *                  If true, ignore uncached fields.
 	 */
-	private function findFunction(name:String, cacheOnly:Bool = true):haxe.Constraints.Function
+	private function findFunction(name:String, cacheOnly:Bool = true):Function
 	{
-		var func:haxe.Constraints.Function = _interp.variables.get(name);
+		var func:Function = _interp.variables.get(name);
 		if (func == null)
 			func = _interp.publicVariables.get(name);
 		return func;

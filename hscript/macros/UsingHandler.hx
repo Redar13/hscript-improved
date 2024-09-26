@@ -32,9 +32,6 @@ class UsingHandler {
 			var key = cl.module;
 			var fkey = key + "." + trimEnum;
 			if(key.contains("_")) return fields; // Weird issue, sorry
-			for (i in Config.DISALLOW_ABSTRACT_AND_ENUM)
-				if(fkey.startsWith(i) || key.startsWith(i))
-					return fields;
 			switch (key)
 			{
 				case "lime.system.Locale" // Error: Unknown identifier : currentLocale, Due to Func
@@ -46,6 +43,9 @@ class UsingHandler {
 					| "cpp.CharStar": // Error: cannot initialize a variable of type 'char *' with an rvalue of type 'const char *', Due to Func
 						return fields;
 			}
+			for (i in Config.DISALLOW_ABSTRACT_AND_ENUM)
+				if(fkey.startsWith(i) || key.startsWith(i))
+					return fields;
 
 			var shadowClass = macro class { };
 			shadowClass.kind = TDClass();
