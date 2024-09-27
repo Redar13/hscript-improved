@@ -179,7 +179,7 @@ class PolymodScriptClass
 		// }
 		// else
 		{
-			superClass = Type.createInstance(cl, args);
+			superClass = Type.createInstance(cl, args); // TODO: Setup _asc before main construct
 		}
 		// trace(Type.getClass(superClass));
 		// trace(Type.typeof(superClass));
