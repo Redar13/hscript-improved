@@ -144,6 +144,48 @@ class Interp {
 		_hasScriptObject = _scriptObjectType != SNull;
 		return scriptObject = v;
 	}
+	public var parentInterp(default, set):Interp;
+	public function set_parentInterp(v:Interp):Interp
+	{
+		if (parentInterp != null)
+		{
+			errorHandler = null;
+			importFailedCallback = null;
+			onMetadata = null;
+			// staticVariables = null;
+			allowStaticVariables = allowPublicVariables = false;
+			#if hscriptPos
+			variables.set("trace", UnsafeReflect.makeVarArgs(function(el) {
+				var inf = posInfos();
+				var v = el.shift();
+				if (el.length > 0)
+					inf.customParams = el;
+				haxe.Log.trace(Std.string(v), inf);
+			}));
+			#end
+		}
+		parentInterp = v;
+		if (parentInterp != null)
+		{
+			errorHandler = parentInterp.errorHandler;
+			importFailedCallback = parentInterp.importFailedCallback;
+			onMetadata = parentInterp.onMetadata;
+			staticVariables = parentInterp.staticVariables;
+			allowStaticVariables = parentInterp.staticVariables;
+			allowPublicVariables = parentInterp.allowPublicVariables;
+			#if hscriptPos
+			var me = this;
+			variables.set("trace", UnsafeReflect.makeVarArgs(function(el) {
+				var oldExpr = parentInterp.curExpr;
+				var curExpr = me.curExpr;
+				parentInterp.curExpr = curExpr;
+				UnsafeReflect.callMethod(null, parentInterp.variables.get("trace"), el);
+				parentInterp.curExpr = oldExpr;
+			}));
+			#end
+		}
+		return parentInterp;
+	}
 	public var errorHandler:Error->Void;
 	public var importFailedCallback:Array<String>->Bool;
 	public var onMetadata:String->Array<Expr>->Expr->Dynamic;
@@ -705,8 +747,8 @@ class Interp {
 		id = StringTools.trim(id);
 		if (id == "super" && _proxy != null)
 		{
-			_proxy._nextIsSuper = _proxy.superClass != null;
-			return _proxy._nextIsSuper ? _proxy.superClass : _proxy.superConstructor;
+			_proxy._nextFromSuper = _proxy.superClass != null;
+			return _proxy._nextFromSuper ? _proxy.superClass : _proxy.superConstructor;
 		}
 		if (locals.exists(id))
 			return locals.get(id).r;
@@ -758,9 +800,9 @@ class Interp {
 			}
 		}
 
-		if (_proxy != null && _proxy._parentInterp != null)
+		if (parentInterp != null)
 		{
-			var expr = _proxy._parentInterp.resolve(id, false, false);
+			var expr = parentInterp.resolve(id, false, false);
 			if (expr != null)
 				return expr;
 		}
@@ -1387,7 +1429,7 @@ class Interp {
 		var cls = Type.getClass(o);
 		if (useRedirects && {
 			var cl:Null<String> = getClassType(o, cls);
-			cl != null && getRedirects.exists(cl) && (_getRedirect = getRedirects[cl]) != null;
+			cl != null && (_getRedirect = getRedirects[cl]) != null;
 		}) {
 			return _getRedirect(o, f);
 		}
@@ -1441,7 +1483,7 @@ class Interp {
 
 		if (useRedirects && {
 			var cl:Null<String> = getClassType(o);
-			cl != null && setRedirects.exists(cl) && (_setRedirect = setRedirects[cl]) != null;
+			cl != null && (_setRedirect = setRedirects[cl]) != null;
 		})
 			return _setRedirect(o, f, v);
 		// if (o is HScriptedClass)
@@ -1479,7 +1521,10 @@ class Interp {
 		}
 		if (Std.isOfType(o, HScriptedClass))
 		{
-			return cast(UnsafeReflect.field(o, "_asc"), PolymodAbstractScriptClass).set(f, v);
+			var proxy:PolymodAbstractScriptClass = UnsafeReflect.field(o, "_asc");
+			if (proxy != null)
+				return proxy.set(f, v);
+			// return cast(UnsafeReflect.field(o, "_asc"), PolymodAbstractScriptClass).set(f, v);
 		}
 		if(isBypassAccessor)
 			UnsafeReflect.setField(o, f, v);
@@ -1535,13 +1580,13 @@ class Interp {
 		return func == null ? null : call(o, func, args);
 	}
 
-	function call(o:Dynamic, f:Dynamic, args:Array<Dynamic>):Dynamic {
+	function call(o:Dynamic, f:Function, args:Array<Dynamic>):Dynamic {
 		// if(f == CustomClassHandler.staticHandler) {
 		// 	return null;
 		// }
 		return UnsafeReflect.callMethod(o, f, args);
 	}
-	function callThis(fun:Dynamic, args:Array<Dynamic>):Dynamic
+	function callThis(fun:Function, args:Array<Dynamic>):Dynamic
 	{
 		// If we are calling this.fn(), special handling is needed to prevent the local scope from being destroyed.
 		// Store the local scope.
@@ -1564,16 +1609,26 @@ class Interp {
 		return result;
 	}
 
+	function getCustomClass(clName:String):Null<Dynamic> {
+
+		var cl = customClasses.get(clName);
+		if (cl == null && parentInterp != null)
+			return parentInterp.getCustomClass(clName);
+		else
+			return cl;
+
+	}
+
 	function cnew(cl:String, args:Array<Dynamic>):Dynamic {
-		switch (customClasses.get(cl))
+		switch (getCustomClass(cl))
 		{
 			case EClass(_, fields, extend, interfaces):
 				// try
 				// {
 					var scriptedCls:Dynamic;
-					if (extend == null) {
-						scriptedCls = "hscript.TemplateClass";
-					} else {
+					if (extend == null)
+						return UnsafeReflect.field(hscript.custom_classes.TemplateClass, "__hsx_init")(cl, this, args);
+					else {
 						final variable:Class<Dynamic> = customClasses.exists(extend) ? null : resolve(extend, false);
 						scriptedCls = variable == null ? extend : Type.getClassName(variable);
 					}
@@ -1594,7 +1649,7 @@ class Interp {
 	}
 	public function createScriptClassInstance(className:String, ?args:Array<Dynamic>):PolymodAbstractScriptClass
 	{
-		switch (customClasses.get(className))
+		switch (getCustomClass(className))
 		{
 			case EClass(className, fields, extend, interfaces):
 				function importVar(thing:String):Class<Dynamic>

@@ -401,13 +401,13 @@ class HScriptedClassMacro
 				{
 					$
 					{
-						if (oldToString != null)
+						if (oldToString == null)
 						(
-							macro return super.toString()
+							macro return $v{cls.name}
 						)
 						else
 						(
-							macro return $v{cls.name}
+							macro return super.toString()
 						)
 					}
 				},
@@ -425,14 +425,13 @@ class HScriptedClassMacro
 				ret: Context.toComplexType(Context.getType('String')),
 				expr: macro
 				{
-					// trace("toString");
 					if (_asc == null)
 					{
 						return this.__hsx_super_to_string_();
 					}
 					else
 					{
-						return _asc.callFunction('toString', []);
+						return _asc.callFunction('toString');
 					}
 				},
 			}),
@@ -730,8 +729,56 @@ class HScriptedClassMacro
 				// We have to call the function to get the true value.
 				return overrideField(field, targetParams, lt());
 			case TFun(args, ret):
-				if (field.params.length > 0) // nah i give up
+				if (field.params.length > 0) // nah i give up | TODO
+				{
+					// trace(field.name);
+					// trace(field.params);
 					return null;
+				}
+				if (field.isFinal)
+				{
+					// Context.info('  Skipping: "${field.name}" is final function', Context.currentPos());
+					// func_access.push(AFinal);
+					return null;
+				}
+
+				if (!field.kind.match(FMethod(MethNormal)))
+					return null;
+
+				/*
+				// We need to skip overriding functions which are inline.
+				// Normal Haxe classes can't override these functions anyway, so we can skip them.
+				switch (field.kind)
+				{
+					case FMethod(k):
+						switch (k)
+						{
+							case MethNormal: // Do nothing.
+							default: return null;
+						}
+				*/
+				/*
+				case FMethod(k):
+					switch (k)
+					{
+						case MethInline:
+							// Context.info('  Skipping: "${field.name}" is inline function', Context.currentPos());
+							return null;
+						case MethDynamic:
+							// Context.info('  Skipping: "${field.name}" is dynamic function', Context.currentPos());
+							return null;
+						case MethMacro:
+							// Context.info('  Skipping: "${field.name}" is macro function', Context.currentPos());
+							return null;
+						default: // Do nothing.
+					}
+				*/
+				/*
+					default:
+						return null;
+				}
+				*/
+
 				// This field is a function of the class.
 				// We need to redirect to the scripted class in case our scripted class overrides it.
 				// If it isn't overridden, the AbstractScriptClass will call the original function.
@@ -752,49 +799,6 @@ class HScriptedClassMacro
 						default: // Do nothing.
 					}
 				}
-
-				if (field.isFinal)
-				{
-					// Context.info('  Skipping: "${field.name}" is final function', Context.currentPos());
-					// func_access.push(AFinal);
-					return null;
-				}
-
-				if (!field.kind.match(FMethod(MethNormal)))
-					return null;
-				/*
-				// We need to skip overriding functions which are inline.
-				// Normal Haxe classes can't override these functions anyway, so we can skip them.
-				switch (field.kind)
-				{
-					case FMethod(k):
-						switch (k)
-						{
-							case MethNormal: // Do nothing.
-							default: return null;
-						}
-				*/
-					/*
-					case FMethod(k):
-						switch (k)
-						{
-							case MethInline:
-								// Context.info('  Skipping: "${field.name}" is inline function', Context.currentPos());
-								return null;
-							case MethDynamic:
-								// Context.info('  Skipping: "${field.name}" is dynamic function', Context.currentPos());
-								return null;
-							case MethMacro:
-								// Context.info('  Skipping: "${field.name}" is macro function', Context.currentPos());
-								return null;
-							default: // Do nothing.
-						}
-					*/
-				/*
-					default:
-						return null;
-				}
-				*/
 
 				// Skip overriding functions which are Generics.
 				// This is because this actually creates several different functions at compile time.

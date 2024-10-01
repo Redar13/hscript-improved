@@ -45,11 +45,14 @@ class ClassExtendMacro {
 
 		if (cl.isAbstract || cl.isExtern || cl.isFinal || cl.isInterface) return fields;
 		if (!cl.name.endsWith("_Impl_") && !cl.name.endsWith(CLASS_SUFFIX) && !cl.name.endsWith("_HSC")) {
-			if(cl.params.length > 0)
+			if(cl.params.length > 0) // TODO
+			{
+				// trace(cl.module + "." + cl.name);
+				// trace(cl.params);
 				return fields;
+			}
 
-			var metas = cl.meta.get();
-			for(m in metas)
+			for(m in cl.meta.get())
 				if (unallowedMetas.contains(m.name))
 					return fields;
 
@@ -78,11 +81,18 @@ class ClassExtendMacro {
 			}, [
 				{name: "HScriptedClass", pack: ["hscript"]}
 			], false, true, false);
+			/*
+			if (cl.params.length > 0)
+			{
+				shadowClass.kind.params = ;
+			}
+			*/
 			shadowClass.name = '${cl.name}$CLASS_SUFFIX';
 			shadowClass.meta = [
 								{name: ":hscriptClass", pos: Context.currentPos()},
 								{name: ":access", params: [macro ""], pos: Context.currentPos()}
 							];
+
 			var imports = Context.getLocalImports().copy();
 			Utils.setupMetas(shadowClass, imports);
 			/*
