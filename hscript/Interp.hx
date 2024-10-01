@@ -171,7 +171,7 @@ class Interp {
 			importFailedCallback = parentInterp.importFailedCallback;
 			onMetadata = parentInterp.onMetadata;
 			staticVariables = parentInterp.staticVariables;
-			allowStaticVariables = parentInterp.staticVariables;
+			allowStaticVariables = parentInterp.allowStaticVariables;
 			allowPublicVariables = parentInterp.allowPublicVariables;
 			#if hscriptPos
 			var me = this;
