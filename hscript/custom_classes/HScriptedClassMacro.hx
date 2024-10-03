@@ -806,9 +806,9 @@ class HScriptedClassMacro
 				// trace(field.name);
 				for (fieldMeta in field.meta.get())
 				{
-					if (fieldMeta.name == ":generic")
+					if (fieldMeta.name == ":generic" || fieldMeta.name == ":unreflective")
 					{
-						// Context.info('  Skipping: "${field.name}" is marked with @:generic', Context.currentPos());
+						// Context.info('  Skipping: "${field.name}" is marked with @:generic or @:unreflective', Context.currentPos());
 						return null;
 					}
 				}
