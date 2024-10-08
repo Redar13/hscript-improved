@@ -442,9 +442,7 @@ class Interp {
 		// }
 		switch (Tools.expr(e1)) {
 			case EIdent(id):
-				if (_proxy != null && _proxy.superClass != null && _proxy.superHasField(id)){
-					UnsafeReflect.setProperty(_proxy.superClass, id, v);
-				}else if (!locals.exists(id)) {
+				if (!locals.exists(id)) {
 					if (_hasScriptObject && !varExists(id)) {
 						var instanceHasField = __instanceFields.contains(id);
 
@@ -1633,7 +1631,10 @@ class Interp {
 						scriptedCls = variable == null ? extend : Type.getClassName(variable);
 					}
 					if (scriptedCls == null || (scriptedCls = Type.resolveClass(scriptedCls + "_HSX")) == null)
+					{
+						error(EInvalidClass(extend));
 						return null;
+					}
 					return UnsafeReflect.field(scriptedCls, "__hsx_init")(cl, this, args);
 				// }
 				// catch(e)
