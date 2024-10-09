@@ -864,17 +864,16 @@ class Interp {
 				*/
 				{
 					var importList:Array<String> = [];
-					for( i in hscript.macros.ClassTools.allClassesAvailable )
+					for( i in ClassTools.allClassesAvailable)
 					{
-						// if(i.length Б pkg.length)
+						// if(i.length < pkg.length)
 						// 	continue;
 						if(
 							!(StringTools.startsWith(i, pkg) && i.substr(pkg.length + 1).indexOf(".") == -1)
 							// && !(StringTools.startsWith(i, altPkg) && i.substr(altPkg.length + 1).indexOf(".") == -1)
 						)
 							continue;
-						if (!StringTools.endsWith(i, "_HSX"))
-							importList.push(i);
+						importList.push(i);
 					}
 					for (i in importList)
 						if (StringTools.endsWith(i, "_HSC") && importList.contains(i.substr(0, i.length - 4)))
@@ -903,6 +902,10 @@ class Interp {
 					return null;
 				var splitClassName = [for (e in c.split(".")) e.trim()];
 				var realClassName = splitClassName.join(".");
+				#if !macro
+				if (ClassTools.typedefDefines.exists(realClassName))
+					realClassName = ClassTools.typedefDefines.get(realClassName);
+				#end
 				var claVarName = splitClassName[splitClassName.length - 1];
 				var toSetName = n != null ? n : claVarName;
 				var oldClassName = realClassName;
