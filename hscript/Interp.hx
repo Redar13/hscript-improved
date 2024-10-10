@@ -170,7 +170,7 @@ class Interp {
 			errorHandler = parentInterp.errorHandler;
 			importFailedCallback = parentInterp.importFailedCallback;
 			onMetadata = parentInterp.onMetadata;
-			staticVariables = parentInterp.staticVariables;
+			// staticVariables = parentInterp.staticVariables;
 			allowStaticVariables = parentInterp.allowStaticVariables;
 			allowPublicVariables = parentInterp.allowPublicVariables;
 			#if hscriptPos
@@ -1630,7 +1630,7 @@ class Interp {
 					if (extend == null)
 						return UnsafeReflect.field(hscript.custom_classes.TemplateClass, "__hsx_init")(cl, this, args);
 					else {
-						final variable:Class<Dynamic> = customClasses.exists(extend) ? null : resolve(extend, false);
+						final variable:Class<HScriptedClass> = customClasses.exists(extend) ? null : resolve(extend, false);
 						scriptedCls = variable == null ? extend : Type.getClassName(variable);
 					}
 					if (scriptedCls == null || (scriptedCls = Type.resolveClass(scriptedCls + "_HSX")) == null)

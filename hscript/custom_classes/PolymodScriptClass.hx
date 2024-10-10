@@ -505,18 +505,14 @@ class PolymodScriptClass
 		return value;
 	}
 
-	/**
-	 * Search for a field (function OR variable) with the given name.
-	 * @param name The name of the field to search for.
-	 * @param cacheOnly If false, scan the full list of fields.
-	 *                  If true, ignore uncached fields.
-	 */
-	private function findField(name:String, cacheOnly:Bool = true):Dynamic
+	private function findField(name:String):Dynamic
 	{
 		if (_interp.variables.exists(name))
 			return _interp.variables.get(name);
 		if (_interp.publicVariables.exists(name))
 			return _interp.publicVariables.get(name);
+		// if (_interp.staticVariables.exists(name))
+		// 	return _interp.staticVariables.get(name);
 		return null;
 	}
 
