@@ -788,6 +788,10 @@ class Interp {
 		}
 		if (resolveClass && _proxy == null)
 		{
+			#if !macro
+			if (ClassTools.typedefDefines.exists(id))
+				id = ClassTools.typedefDefines.get(id);
+			#end
 			var cl:Class<Dynamic> = Type.resolveClass(id); // now you can do this thing: var a:haxe.io.Path = new haxe.io.Path();  yee
 			if (cl == null)
 				cl = Type.resolveClass('${id}_HSC');
@@ -929,6 +933,11 @@ class Interp {
 					if(splitClassName.length > 1) {
 						splitClassName.splice(-2, 1); // Remove the last last item
 						realClassName = splitClassName.join(".");
+
+						#if !macro
+						if (ClassTools.typedefDefines.exists(realClassName))
+							realClassName = ClassTools.typedefDefines.get(realClassName);
+						#end
 
 						if (importBlocklist.contains(realClassName))
 							return null;
