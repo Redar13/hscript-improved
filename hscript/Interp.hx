@@ -1638,10 +1638,9 @@ class Interp {
 					var scriptedCls:Dynamic;
 					if (extend == null)
 						return UnsafeReflect.field(hscript.custom_classes.TemplateClass, "__hsx_init")(cl, this, args);
-					else {
-						final variable:Class<HScriptedClass> = customClasses.exists(extend) ? null : resolve(extend, false);
-						scriptedCls = variable == null ? extend : Type.getClassName(variable);
-					}
+
+					final variable:Class<Dynamic> = customClasses.exists(extend) ? null : resolve(extend, false);
+					scriptedCls = variable == null ? extend : Type.getClassName(variable);
 					if (scriptedCls == null || (scriptedCls = Type.resolveClass(scriptedCls + "_HSX")) == null)
 					{
 						error(EInvalidClass(extend));
