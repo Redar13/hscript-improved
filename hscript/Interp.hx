@@ -1640,6 +1640,11 @@ class Interp {
 						return UnsafeReflect.field(hscript.custom_classes.TemplateClass, "__hsx_init")(cl, this, args);
 
 					final variable:Class<Dynamic> = customClasses.exists(extend) ? null : resolve(extend, false);
+					if (UnsafeReflect.hasField(variable, "__hsx_init"))
+					{
+						trace(variable);
+						return UnsafeReflect.field(variable, "__hsx_init")(cl, this, args);
+					}
 					scriptedCls = variable == null ? extend : Type.getClassName(variable);
 					if (scriptedCls == null || (scriptedCls = Type.resolveClass(scriptedCls + "_HSX")) == null)
 					{
@@ -1668,7 +1673,12 @@ class Interp {
 				{
 					if (thing == null)
 						return null;
-					final variable:Class<Dynamic> = customClasses.exists(thing) ? null : resolve(thing, false);
+					final variable:Class<Dynamic> = customClasses.exists(thing) ? null : resolve(thing); // TODO: Allow extend inner scripted class
+					if (variable != null && UnsafeReflect.hasField(variable, "__hsx_init"))
+					{
+						trace(variable);
+						return variable;
+					}
 					return variable == null ? null : Type.resolveClass('${Type.getClassName(variable)}_HSX');
 				}
 				return new PolymodScriptClass(

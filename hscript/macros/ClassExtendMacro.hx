@@ -18,14 +18,14 @@ using Lambda;
 
 @:access(hscript.custom_classes.HScriptedClassMacro)
 class ClassExtendMacro {
-	public static inline final FUNC_PREFIX = "_HX_SUPER__";
-	public static inline final CLASS_SUFFIX = "_HSX";
+	public static inline final FUNC_PREFIX:String = "_HX_SUPER__";
+	public static inline final CLASS_SUFFIX:String = "_HSX";
 
 	public static var unallowedMetas:Array<String> = [":hscriptClassPreProcessed", ":structInit", ":bitmap", ":noCustomClass", ":generic", "hscriptClassPreProcessed", ":hscriptClass"];
 
 	public static var modifiedClasses:Array<String> = [];
 
-	public static function init() {
+	public static function init():Void {
 		#if !display
 		#if CUSTOM_CLASSES
 		if(Context.defined("display")) return;
@@ -38,10 +38,10 @@ class ClassExtendMacro {
 
 	// TODO?: Check if the class is completely written.
 	public static function build():Array<Field> {
-		var fields = Context.getBuildFields();
-		var clRef = Context.getLocalClass();
+		var fields:Array<Field> = Context.getBuildFields();
+		var clRef:Null<haxe.macro.Type.Ref<ClassType>> = Context.getLocalClass();
 		if (clRef == null || fields.length == 0) return fields;
-		var cl = clRef.get();
+		var cl:ClassType = clRef.get();
 
 		if (cl.isAbstract || cl.isExtern || cl.isFinal || cl.isInterface) return fields;
 		if (!cl.name.endsWith("_Impl_") && !cl.name.endsWith(CLASS_SUFFIX) && !cl.name.endsWith("_HSC")) {
@@ -56,23 +56,25 @@ class ClassExtendMacro {
 				if (unallowedMetas.contains(m.name))
 					return fields;
 
-			var key = cl.module;
-			var fkey = cl.module + "." + cl.name;
+			var key:String = cl.module;
+			var fkey:String = cl.module + "." + cl.name;
 
 			for (i in Config.DISALLOW_CUSTOM_CLASSES)
 				if(fkey.startsWith(i) || key.startsWith(i))
 					return fields;
 
-			var _tempCl = cl;
-			// trace(_tempCl.fields.get());
-			var isNotStaticModule = _tempCl.constructor != null && _tempCl.fields.get().length > 0;
-			while (!isNotStaticModule && _tempCl.superClass != null)
+			var _tempCl:ClassType = cl;
+			var isStaticModule:Bool = _tempCl.init == null && fields.filter(i -> return !(i.access.contains(AStatic) || i.access.contains(AMacro))).length == 0;
+			// var isStaticModule:Bool = _tempCl.init == null && _tempCl.fields.get().length == 0;
+			while (isStaticModule && _tempCl.superClass != null)
 			{
 				_tempCl = _tempCl.superClass.t.get();
-				isNotStaticModule = _tempCl.constructor != null && _tempCl.fields.get().length > 0;
+				isStaticModule = _tempCl.init == null && _tempCl.fields.get().length == 0;
 			}
-			if(!isNotStaticModule || cl.params.length > 0) // doesn't compile static module or class with only static fields
+			if(isStaticModule) // doesn't compile static module or class with only static fields
+			{
 				return fields;
+			}
 
 			var shadowClass:TypeDefinition = macro class { };
 			shadowClass.kind = TDClass({
@@ -93,7 +95,7 @@ class ClassExtendMacro {
 								{name: ":access", params: [macro ""], pos: Context.currentPos()}
 							];
 
-			var imports = Context.getLocalImports().copy();
+			var imports:Array<ImportExpr> = Context.getLocalImports().copy();
 			Utils.setupMetas(shadowClass, imports);
 			/*
 			for(e in cl.params) {

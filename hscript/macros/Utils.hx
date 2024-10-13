@@ -96,7 +96,11 @@ class Utils {
 	}*/
 
 	public static function fixModuleName(name:String) {
-		return [for(s in name.split(".")) if (s.charAt(0) == "_") s.substr(1) else s].join(".");
+		return name;
+		// var split = name.split(".");
+		// if (split.length > 1 && split[split.length - 2].charAt(0) == "_")
+		// 	split[split.length - 2] = split[split.length - 2].substr(1);
+		// return split.join(".");
 	}
 
 	public static function removeImpl(name:String) {
