@@ -18,7 +18,6 @@ class Config {
 	// Incase any of your files fail
 	// These are the module names
 	public static final DISALLOW_CUSTOM_CLASSES = [
-		"game.backend.utils",
 		"flixel.addons.display.FlxSpriteAniRot",
 		"flixel.addons.display.FlxShaderMaskCamera",
 		"flixel.addons.display.FlxStarField",
