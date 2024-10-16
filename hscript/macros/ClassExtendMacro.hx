@@ -1,27 +1,22 @@
 package hscript.macros;
 
 #if macro
-import haxe.macro.Type.ClassType;
+import haxe.macro.Type;
 import Type.ValueType;
-import haxe.macro.Expr.Function;
 import haxe.macro.Expr;
-import haxe.macro.Type.MetaAccess;
-import haxe.macro.Type.FieldKind;
-import haxe.macro.Type.ClassField;
-import haxe.macro.Type.VarAccess;
 import haxe.macro.*;
-import hscript.custom_classes.HScriptedClassMacro;
+import hscript.macros.HScriptedClassMacro;
 import Sys;
 
 using StringTools;
 using Lambda;
 
-@:access(hscript.custom_classes.HScriptedClassMacro)
+@:access(hscript.macros.HScriptedClassMacro)
 class ClassExtendMacro {
 	public static inline final FUNC_PREFIX:String = "_HX_SUPER__";
 	public static inline final CLASS_SUFFIX:String = "_HSX";
 
-	public static var unallowedMetas:Array<String> = [":hscriptClassPreProcessed", ":structInit", ":bitmap", ":noCustomClass", ":generic", "hscriptClassPreProcessed", ":hscriptClass"];
+	public static var unallowedMetas:Array<String> = ["hscriptClassPreProcessed", ":structInit", ":bitmap", ":noCustomClass", ":generic", ":hscriptClass"];
 
 	public static var modifiedClasses:Array<String> = [];
 

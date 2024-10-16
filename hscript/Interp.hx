@@ -71,6 +71,7 @@ enum abstract ScriptObjectType(UInt8) {
 class DeclaredVar {
 	public var r:Dynamic;
 	public var depth:Int;
+	function toString() return '{r: $r, depth:$depth}';
 }
 
 @:structInit
@@ -78,6 +79,7 @@ class RedeclaredVar {
 	public var n:String;
 	public var old:DeclaredVar;
 	public var depth:Int;
+	function toString() return '{n$n, depth:$depth, old: $old}';
 }
 
 private enum Stop {
@@ -85,6 +87,8 @@ private enum Stop {
 	SContinue;
 	SReturn;
 }
+
+typedef HXStringMap<T> = #if haxe3 Map<String, T> #else Hash<T> #end;
 
 @:access(hscript.HScriptedClass)
 class Interp {
@@ -189,23 +193,13 @@ class Interp {
 	public var errorHandler:Error->Void;
 	public var importFailedCallback:Array<String>->Bool;
 	public var onMetadata:String->Array<Expr>->Expr->Dynamic;
-	#if haxe3
-	public var customClasses:Map<String, Dynamic>;
-	public var variables:Map<String, Dynamic>;
-	public var publicVariables:Map<String, Dynamic>;
-	public var staticVariables:Map<String, Dynamic>;
+	public var customClasses:HXStringMap<Dynamic>;
+	public var variables:HXStringMap<Dynamic>;
+	public var publicVariables:HXStringMap<Dynamic>;
+	public var staticVariables:HXStringMap<Dynamic>;
 
-	public var locals:Map<String, DeclaredVar>;
-	var binops:Map<String, Expr->Expr->Dynamic>;
-	#else
-	public var customClasses:Hash<Dynamic>;
-	public var variables:Hash<Dynamic>;
-	public var publicVariables:Hash<Dynamic>;
-	public var staticVariables:Hash<Dynamic>;
-
-	public var locals:Hash<DeclaredVar>;
-	var binops:Hash<Expr->Expr->Dynamic>;
-	#end
+	public var locals:HXStringMap<DeclaredVar>;
+	var binops:HXStringMap<Expr->Expr->Dynamic>;
 
 	var depth:Int = 0;
 	var inTry:Bool;
@@ -244,17 +238,10 @@ class Interp {
 	}
 
 	private function resetVariables() {
-		#if haxe3
-		customClasses = new Map<String, Dynamic>();
-		variables = new Map<String, Dynamic>();
-		publicVariables = new Map<String, Dynamic>();
-		staticVariables = new Map<String, Dynamic>();
-		#else
-		customClasses = new Hash();
-		variables = new Hash();
-		publicVariables = new Hash();
-		staticVariables = new Hash();
-		#end
+		customClasses = new HXStringMap<Dynamic>();
+		variables = new HXStringMap<Dynamic>();
+		publicVariables = new HXStringMap<Dynamic>();
+		staticVariables = new HXStringMap<Dynamic>();
 
 		variables.set("null", null);
 		variables.set("true", true);
@@ -701,12 +688,8 @@ class Interp {
 		return null;
 	}
 
-	public function duplicate<T>(h:#if haxe3 Map<String, T> #else Hash<T> #end) {
-		#if haxe3
-		var h2 = new Map();
-		#else
-		var h2 = new Hash();
-		#end
+	public function duplicate<T>(h:HXStringMap<T>) {
+		var h2 = new HXStringMap<T>();
 		for (k in h.keys())
 			h2.set(k, h.get(k));
 		return h2;
@@ -748,8 +731,6 @@ class Interp {
 			_proxy._nextFromSuper = _proxy.superClass != null;
 			return _proxy._nextFromSuper ? _proxy.superClass : _proxy.superConstructor;
 		}
-		if (locals.exists(id))
-			return locals.get(id).r;
 
 		if (variables.exists(id))
 			return variables.get(id);
@@ -975,9 +956,11 @@ class Interp {
 					#end
 				}
 			case EIdent(id):
+				var l = locals.get(id);
+				if( l != null )
+					return l.r;
 				return resolve(id);
 			case EVar(n, type, e, isPublic, isStatic):
-				declared.push({n: n, old: locals.get(n), depth: depth});
 				var initExpr:Dynamic = null;
 				if (e != null)
 				{
@@ -989,15 +972,16 @@ class Interp {
 					}
 					*/
 				}
+				declared.push({n: n, old: locals.get(n), depth: depth});
 				locals.set(n, {r: initExpr, depth: depth});
 				if (depth == 0) {
 					if(isStatic == true) {
 						if(!staticVariables.exists(n)) {
-							staticVariables.set(n, locals[n].r);
+							staticVariables.set(n, initExpr);
 						}
 						return null;
 					}
-					(isPublic ? publicVariables : variables).set(n, locals[n].r);
+					(isPublic ? publicVariables : variables).set(n, initExpr);
 				}
 				return null;
 			case EBlock(exprs):
@@ -1075,17 +1059,21 @@ class Interp {
 					if (e != null && e.depth > 0)
 						capturedLocals.set(k, e);
 
-				var me = this;
-				// var hasOpt = false;
-				var minParams = 0;
+				var me:Interp = this;
+				var hasOpt:Bool = false;
+				var minParams:Int = 0;
 				for (p in params)
+				{
 					if (p.opt)
 					{
-						// hasOpt = true;
+						hasOpt = true;
 					}
 					else
+					{
 						minParams++;
-				var f = function(args:Array<Dynamic>) {
+					}
+				}
+				var f = UnsafeReflect.makeVarArgs(function(args:Array<Dynamic>) {
 					if (me.locals == null || me.variables == null) return null;
 
 					if (((args == null) ? 0 : args.length) != params.length) {
@@ -1100,14 +1088,24 @@ class Interp {
 						var extraParams = args.length - minParams;
 						var pos = 0;
 						for (p in params)
-							if (p.opt) {
-								if (extraParams > 0) {
+						{
+							if (p.opt)
+							{
+								if (extraParams > 0)
+								{
 									args2.push(args[pos++]);
 									extraParams--;
-								} else
+								}
+								else
+								{
 									args2.push(null);
-							} else
+								}
+							}
+							else
+							{
 								args2.push(args[pos++]);
+							}
+						}
 						args = args2;
 					}
 					var old = me.locals, depth = me.depth;
@@ -1135,8 +1133,7 @@ class Interp {
 					me.locals = old;
 					me.depth = depth;
 					return r;
-				};
-				var f = UnsafeReflect.makeVarArgs(f);
+				});
 				if (name != null) {
 					if (depth == 0) {
 						// global function
@@ -1152,69 +1149,25 @@ class Interp {
 				return f;
 			case EArrayDecl(arr, wantedType):
 				var isMap = false;
-				var isTypeMap = false;
-				if(!isMap && wantedType != null) {
+				if(wantedType != null) {
 					isMap = wantedType.match(CTPath(["Map"], [_, _]));
-					isTypeMap = true;
 				} else {
 					isMap = arr.length > 0 && Tools.expr(arr[0]).match(EBinop("=>", _));
 				}
-				if (isMap) {
-					var isAllString:Bool = true;
-					var isAllInt:Bool = true;
-					var isAllObject:Bool = true;
-					var isAllEnum:Bool = true;
-					var keys:Array<Dynamic> = [];
-					var values:Array<Dynamic> = [];
-					for (e in arr) {
-						switch (Tools.expr(e)) {
-							case EBinop("=>", eKey, eValue): {
-								var key:Dynamic = expr(eKey);
-								var value:Dynamic = expr(eValue);
-								isAllString = isAllString && (key is String);
-								isAllInt = isAllInt && (key is Int);
-								isAllObject = isAllObject && UnsafeReflect.isObject(key);
-								isAllEnum = isAllEnum && UnsafeReflect.isEnumValue(key);
-								keys.push(key);
-								values.push(value);
-							}
+				if( isMap ) {
+					var keys = [];
+					var values = [];
+					for( e in arr ) {
+						switch(Tools.expr(e)) {
+							case EBinop("=>", eKey, eValue):
+								keys.push(expr(eKey));
+								values.push(expr(eValue));
 							default: throw("=> expected");
 						}
 					}
-
-					if(isTypeMap) {
-						if(wantedType != null) {
-							isAllString = wantedType.match(CTPath(["Map"], [CTPath(["String"], _), _]));
-							isAllInt = wantedType.match(CTPath(["Map"], [CTPath(["Int"], _), _]));
-							if(isAllString || isAllInt) {
-								isAllObject = false;
-								isAllEnum = false;
-							} else {
-								if(!isAllObject && !isAllEnum) {
-									throw("Unknown Type Key");
-								}
-							}
-						}
-					}
-
-					var map:Dynamic = {
-						if (isAllInt)
-							new haxe.ds.IntMap<Dynamic>();
-						else if (isAllString)
-							new haxe.ds.StringMap<Dynamic>();
-						else if (isAllEnum)
-							new haxe.ds.EnumValueMap<Dynamic, Dynamic>();
-						else if (isAllObject)
-							new haxe.ds.ObjectMap<Dynamic, Dynamic>();
-						else
-							throw 'Inconsistent key types';
-					}
-					for (n in 0...keys.length) {
-						setMapValue(map, keys[n], values[n]);
-					}
-					return map;
+					return makeMap(keys, values, wantedType);
 				} else {
-					return [for (e in arr) expr(e)];
+					return [for (i in arr) expr(i)];
 				}
 			case EArray(e, index):
 				var arr:Dynamic = expr(e);
@@ -1252,7 +1205,7 @@ class Interp {
 					return v;
 				}
 			case EObject(fl):
-				var o = {};
+				var o:Dynamic = {};
 				for (f in fl)
 					UnsafeReflect.setField(o, f.name, expr(f.e));
 				return o;
@@ -1294,6 +1247,70 @@ class Interp {
 		return null;
 	}
 
+	function makeMap( keys : Array<Dynamic>, values : Array<Dynamic>, ?wantedType:Null<CType> ) : Dynamic {
+		var isAllString:Bool = true;
+		var isAllInt:Bool = true;
+		var isAllObject:Bool = true;
+		var isAllEnum:Bool = true;
+		for( key in keys ) {
+			isAllString = isAllString && (key is String);
+			isAllInt = isAllInt && (key is Int);
+			isAllObject = isAllObject && Reflect.isObject(key);
+			isAllEnum = isAllEnum && Reflect.isEnumValue(key);
+		}
+
+		if(wantedType != null) {
+			switch (wantedType)
+			{
+				case CTPath(["Map"], [CTPath(path, _), _]):
+					switch (path)
+					{
+						case ["String"]:
+							isAllString = true;
+						case ["Int"]:
+							isAllInt = true;
+						case _:
+					}
+				case _:
+			}
+			if(isAllString || isAllInt) {
+				isAllObject = false;
+				isAllEnum = false;
+			} else {
+				if(!isAllObject && !isAllEnum) {
+					error(ECustom("Unknown Type Key"));
+				}
+			}
+		}
+
+		if( isAllInt ) {
+			var m = new Map<Int,Dynamic>();
+			for( i => key in keys )
+				m.set(key, values[i]);
+			return m;
+		}
+		if( isAllString ) {
+			var m = new Map<String,Dynamic>();
+			for( i => key in keys )
+				m.set(key, values[i]);
+			return m;
+		}
+		if( isAllEnum ) {
+			var m = new haxe.ds.EnumValueMap<Dynamic,Dynamic>();
+			for( i => key in keys )
+				m.set(key, values[i]);
+			return m;
+		}
+		if( isAllObject ) {
+			var m = new Map<{},Dynamic>();
+			for( i => key in keys )
+				m.set(key, values[i]);
+			return m;
+		}
+		error(ECustom("Invalid map keys "+keys));
+		return null;
+	}
+
 	function doWhileLoop(econd, e) {
 		var old = declared.length;
 		do {
@@ -1323,7 +1340,7 @@ class Interp {
 	}
 
 
-	private var _scriptClassDescriptors:Map<String, ClassDeclEx> = new Map<String, ClassDeclEx>();
+	private var _scriptClassDescriptors:HXStringMap<ClassDeclEx> = new HXStringMap<ClassDeclEx>();
 
 	function whileLoop(econd, e) {
 		var old = declared.length;
@@ -1411,8 +1428,8 @@ class Interp {
 		cast(map, IMap<Dynamic, Dynamic>).set(key, value);
 	}
 
-	public static var getRedirects:Map<String, (Dynamic, String)->Dynamic> = [];
-	public static var setRedirects:Map<String, (Dynamic, String, Dynamic)->Dynamic> = [];
+	public static var getRedirects:HXStringMap<(Dynamic, String)->Dynamic> = [];
+	public static var setRedirects:HXStringMap<(Dynamic, String, Dynamic)->Dynamic> = [];
 
 	private static var _getRedirect:Dynamic->String->Dynamic;
 	private static var _setRedirect:Dynamic->String->Dynamic->Dynamic;

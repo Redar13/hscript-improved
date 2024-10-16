@@ -35,21 +35,15 @@ class ClassTools
 		{
 			switch t
 			{
-				case TMono(_.get() => t):
+				case TMono(c):
 					if (t != null)
 					{
-						onGenerate(t);
+						onGenerate(c.get());
 					}
-				case TEnum(_.get() => c, _):
-					if (isValidName(c.name))
-					{
-						allClassesAvailable.push(getModulePath(c));
-					}
-				case TInst(_.get() => c, _):
-					if (isValidName(c.name))
-					{
-						allClassesAvailable.push(getModulePath(c));
-					}
+				case TEnum(_.toString() => c, _):
+					allClassesAvailable.push(c);
+				case TInst(_.toString() => c, _):
+					allClassesAvailable.push(c);
 				case TType(_.get() => c, _):
 					switch c.type
 					{

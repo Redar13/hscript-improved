@@ -1,4 +1,4 @@
-package hscript.custom_classes;
+package hscript.macros;
 
 import haxe.macro.Context;
 import haxe.macro.Expr;
