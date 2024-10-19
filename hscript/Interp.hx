@@ -1254,47 +1254,48 @@ class Interp {
 	}
 
 	function makeMap(keys:Array<Dynamic>, values:Array<Dynamic>, ?wantedType:Null<CType>):Dynamic {
-		var isAllString:Bool = true;
-		var isAllInt:Bool = true;
-		var isAllObject:Bool = true;
-		var isAllEnum:Bool = true;
-		for (key in keys) {
-			isAllString = isAllString && (key is String);
-			isAllInt = isAllInt && (key is Int);
-			isAllObject = isAllObject && Reflect.isObject(key);
-			isAllEnum = isAllEnum && Reflect.isEnumValue(key);
-		}
-
-		if (wantedType != null) {
-			switch (wantedType) {
-				case CTPath(["Map"], [CTPath(path, _), _]):
-					switch (path) {
-						case ["String"]:
-							isAllString = true;
-						case ["Int"]:
-							isAllInt = true;
-						case _:
-					}
-				case _:
-			}
-			if (isAllString || isAllInt) {
-				isAllObject = false;
-				isAllEnum = false;
-			} else {
-				if (!isAllObject && !isAllEnum) {
-					error(ECustom("Unknown Type Key"));
+		var isAllString:Bool = false;
+		var isAllInt:Bool = false;
+		var isAllObject:Bool = false;
+		var isAllEnum:Bool = false;
+		switch (wantedType) {
+			case CTPath(["Map"], [CTPath(path, _), _]):
+				switch (path) {
+					case ["String"]:
+						isAllString = true;
+					case ["Int"]:
+						isAllInt = true;
+					case _:
 				}
+			case _:
+		}
+		if (isAllString || isAllInt) {
+			isAllObject = false;
+			isAllEnum = false;
+		} else {
+			isAllString = true;
+			isAllInt = true;
+			isAllObject = true;
+			isAllEnum = true;
+			for (key in keys) {
+				isAllString = isAllString && (key is String);
+				isAllInt = isAllInt && (key is Int);
+				isAllObject = isAllObject && Reflect.isObject(key);
+				isAllEnum = isAllEnum && Reflect.isEnumValue(key);
+			}
+			if (!isAllObject && !isAllEnum) {
+				error(ECustom("Unknown Type Key"));
 			}
 		}
 
 		if (isAllInt) {
-			var m = new Map<Int, Dynamic>();
+			var m = new haxe.ds.IntMap<Dynamic>();
 			for (i => key in keys)
 				m.set(key, values[i]);
 			return m;
 		}
 		if (isAllString) {
-			var m = new Map<String, Dynamic>();
+			var m = new haxe.ds.StringMap<Dynamic>();
 			for (i => key in keys)
 				m.set(key, values[i]);
 			return m;
@@ -1306,7 +1307,7 @@ class Interp {
 			return m;
 		}
 		if (isAllObject) {
-			var m = new Map<{}, Dynamic>();
+			var m = new haxe.ds.ObjectMap<Dynamic, Dynamic>();
 			for (i => key in keys)
 				m.set(key, values[i]);
 			return m;

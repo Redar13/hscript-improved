@@ -1184,7 +1184,7 @@ class Parser {
 							c.expr = if( exprs.length == 1)
 								exprs[0];
 							else if( exprs.length == 0 )
-								mk(EBlock([]), tokenMin, tokenMin);
+								mk(EBlock(exprs), tokenMin, tokenMin);
 							else
 								mk(EBlock(exprs), pmin(exprs[0]), pmax(exprs[exprs.length - 1]));
 						case TId("default"):
@@ -1206,7 +1206,7 @@ class Parser {
 							def = if( exprs.length == 1)
 								exprs[0];
 							else if( exprs.length == 0 )
-								mk(EBlock([]), tokenMin, tokenMin);
+								mk(EBlock(exprs), tokenMin, tokenMin);
 							else
 								mk(EBlock(exprs), pmin(exprs[0]), pmax(exprs[exprs.length - 1]));
 						case TBrClose:

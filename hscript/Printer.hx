@@ -130,19 +130,20 @@ class Printer {
 				}
 				add(' {\n');
 				tabs += "\t";
-				add(tabs);
 				for(field in fields) {
+					add(tabs);
 					expr(field);
+					add(";\n");
 				}
 
-				tabs = tabs.substring(0, tabs.length - 1);
+				tabs = tabs.substring(1);
 				add(tabs);
 				add("}");
 			case EConst(c):
 				switch( c ) {
-				case CInt(i): add(i);
-				case CFloat(f): add(f);
-				case CString(s): add('"'); add(s.split('"').join('\\"').split("\n").join("\\n").split("\r").join("\\r").split("\t").join("\\t")); add('"');
+					case CInt(i): add(i);
+					case CFloat(f): add(f);
+					case CString(s): add('"'); add(s.split('"').join('\\"').split("\n").join("\\n").split("\r").join("\\r").split("\t").join("\\t")); add('"');
 				}
 			case EIdent(v):
 				add(v);
@@ -164,7 +165,13 @@ class Printer {
 					for( e in el ) {
 						add(tabs);
 						expr(e);
-						add(";\n");
+						// switch Tools.expr(e)
+						// {
+						// 	case EWhile(_, _) | EDoWhile(_, _) | EFor(_, _, _) | EIf(_, _):
+						// 	default:
+								add(";");
+						// }
+						add("\n");
 					}
 					tabs = tabs.substring(1);
 					add(tabs);
@@ -304,9 +311,9 @@ class Printer {
 						expr(f.e);
 						add(",\n");
 					}
+					add("}");
 					tabs = tabs.substring(1);
 					add(tabs);
-					add("}");
 				}
 			case ETernary(c,e1,e2):
 				expr(c);
@@ -315,10 +322,12 @@ class Printer {
 				add(" : ");
 				expr(e2);
 			case ESwitch(e, cases, def):
-				add("switch (");
+				add("switch ");
 				expr(e);
-				add(") {\n");
+				add(" {\n");
+				tabs += "\t";
 				for( c in cases ) {
+					add(tabs);
 					add("case ");
 					var first = true;
 					for( v in c.values ) {
@@ -326,14 +335,20 @@ class Printer {
 						expr(v);
 					}
 					add(": ");
+					tabs += "\t";
 					expr(c.expr);
 					add(";\n");
+					tabs = tabs.substring(1);
 				}
 				if( def != null ) {
+					add(tabs);
 					add("default: ");
+					tabs += "\t";
 					expr(def);
+					tabs = tabs.substring(1);
 					add(";\n");
 				}
+				tabs = tabs.substring(1);
 				add("}");
 			case EMeta(name, args, e):
 				add("@");
