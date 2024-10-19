@@ -20,6 +20,7 @@
  * DEALINGS IN THE SOFTWARE.
  */
 package hscript;
+
 import hscript.Expr;
 
 class Printer {
@@ -103,7 +104,7 @@ class Printer {
 
 	function addType( t : CType ) {
 		if( t != null ) {
-			add(" : ");
+			add(":");
 			type(t);
 		}
 	}
@@ -129,11 +130,13 @@ class Printer {
 				}
 				add(' {\n');
 				tabs += "\t";
-				//for(field in fields) {
-				//	expr(field);
-				//}
+				add(tabs);
+				for(field in fields) {
+					expr(field);
+				}
 
-				tabs = tabs.substr(1);
+				tabs = tabs.substring(0, tabs.length - 1);
+				add(tabs);
 				add("}");
 			case EConst(c):
 				switch( c ) {
@@ -163,7 +166,8 @@ class Printer {
 						expr(e);
 						add(";\n");
 					}
-					tabs = tabs.substr(1);
+					tabs = tabs.substring(1);
+					add(tabs);
 					add("}");
 				}
 			case EField(e, f, s):
@@ -200,30 +204,30 @@ class Printer {
 				}
 				add(")");
 			case EIf(cond,e1,e2):
-				add("if( ");
+				add("if (");
 				expr(cond);
-				add(" ) ");
+				add(") ");
 				expr(e1);
 				if( e2 != null ) {
 					add(" else ");
 					expr(e2);
 				}
 			case EWhile(cond,e):
-				add("while( ");
+				add("while ");
 				expr(cond);
-				add(" ) ");
+				add(" ");
 				expr(e);
 			case EDoWhile(cond,e):
 				add("do ");
 				expr(e);
-				add(" while ( ");
+				add(" while ");
 				expr(cond);
-				add(" )");
+				add(" ");
 			case EFor(v, it, e, ithv):
 				if(ithv != null)
-					add("for( "+ithv+" => "+v+" in ");
+					add("for( " + ithv + " => " + v + " in ");
 				else
-					add("for( "+v+" in ");
+					add("for( " + v + " in ");
 				expr(it);
 				add(" ) ");
 				expr(e);
@@ -256,15 +260,19 @@ class Printer {
 			case EArray(e,index):
 				expr(e);
 				add("[");
+				tabs += "\t";
 				expr(index);
+				tabs = tabs.substring(1);
 				add("]");
 			case EArrayDecl(el, _):
 				add("[");
+				tabs += "\t";
 				var first = true;
 				for( e in el ) {
 					if( first ) first = false else add(", ");
 					expr(e);
 				}
+				tabs = tabs.substring(1);
 				add("]");
 			case ENew(cl, args):
 				add("new " + cl + "(");
@@ -296,7 +304,8 @@ class Printer {
 						expr(f.e);
 						add(",\n");
 					}
-					tabs = tabs.substr(1);
+					tabs = tabs.substring(1);
+					add(tabs);
 					add("}");
 				}
 			case ETernary(c,e1,e2):
@@ -306,9 +315,9 @@ class Printer {
 				add(" : ");
 				expr(e2);
 			case ESwitch(e, cases, def):
-				add("switch( ");
+				add("switch (");
 				expr(e);
-				add(") {");
+				add(") {\n");
 				for( c in cases ) {
 					add("case ");
 					var first = true;

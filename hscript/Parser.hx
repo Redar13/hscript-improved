@@ -41,6 +41,7 @@ enum Token {
 	TDoubleDot;
 	TMeta( s : String );
 	TPrepro( s : String );
+	TApostr;
 }
 
 class Parser {
@@ -81,6 +82,8 @@ class Parser {
 		resume from parsing errors (when parsing incomplete code, during completion for example)
 	**/
 	public var resumeErrors : Bool;
+
+	public var allowStringInterpolation:Bool = true;
 
 	// implementation
 	var input : String;
@@ -495,9 +498,166 @@ class Parser {
 			case TMeta(id) if( allowMetadata ):
 				var args = parseMetaArgs();
 				return mk(EMeta(id, args, parseExpr()),p1);
+			case TApostr:
+				return parseExprNext(parseStringInterpolation());
 			default:
 				return unexpected(tk);
 		}
+	}
+
+	function parseStringInterpolation():Expr
+	{
+		var char:Int = 0;
+		var backslash = false, dollar = false;
+		var parts:Array<Dynamic> = [];
+		var currentPart:Int = 0;
+		var hasOnlyString:Bool = true;
+
+		var old = line;
+
+		#if hscriptPos
+		var p1 = tokenMin;
+		#end
+
+		while (true)
+		{
+			if (this.char < 0)
+				char = readChar();
+			else
+			{
+				char = this.char;
+				this.char = -1;
+			}
+
+			if (StringTools.isEof(char))
+			{
+				line = old;
+				error(EUnterminatedString, p1, p1);
+				break;
+			}
+
+			if (backslash)
+			{
+				backslash = false;
+				switch (char)
+				{
+					case 'n'.code:
+						this.char = '\n'.code;
+					case 'r'.code:
+						this.char = '\r'.code;
+					case 't'.code:
+						this.char = '\t'.code;
+					case "'".code, '"'.code, '\\'.code:
+						this.char = char;
+					case '/'.code:
+						if (allowJSON)
+							this.char = char;
+						else
+							invalidChar(char);
+					case "u".code:
+						if (!allowJSON)
+							invalidChar(char);
+						var k = 0;
+						for (i in 0...4)
+						{
+							k <<= 4;
+							var char = readChar();
+							switch (char)
+							{
+								case 48, 49, 50, 51, 52, 53, 54, 55, 56, 57: // 0-9
+									k += char - 48;
+								case 65, 66, 67, 68, 69, 70: // A-F
+									k += char - 55;
+								case 97, 98, 99, 100, 101, 102: // a-f
+									k += char - 87;
+								default:
+									if (StringTools.isEof(char))
+									{
+										line = old;
+										error(EUnterminatedString, p1, p1);
+									}
+									invalidChar(char);
+							}
+						}
+						this.char = k;
+					default:
+						invalidChar(char);
+				}
+			}
+			else if (char == '$'.code && !dollar)
+			{
+				var c = readChar();
+				this.char = c;
+				if (c == '$'.code)
+				{
+					dollar = true;
+				}
+				else
+					switch (token())
+					{
+						case TBrOpen:
+							hasOnlyString = false;
+							currentPart = parts.push(parseExpr());
+							ensure(TBrClose);
+						case TId(s):
+							currentPart = parts.push(mk(EIdent(s)));
+						default:
+					}
+			}
+			else if (char == '\\'.code)
+			{
+				backslash = true;
+			}
+			else if (char == "'".code)
+			{
+				break;
+			}
+			else
+			{
+				if (parts[currentPart] == null)
+					parts[currentPart] = "";
+
+				if (char == '\n'.code)
+					line++;
+
+				parts[currentPart] += String.fromCharCode(char);
+			}
+		}
+		// trace(parts);
+		if (parts.length == 0)
+		{
+			return mk(EConst(CString('')));
+		}
+		if (parts.length == 1)
+		{
+			return mk(EConst(CString(parts[0])));
+		}
+
+		var e:Expr = null;
+		var currentPart:Int = 0;
+		while (parts.length > currentPart)
+		{
+			var part:Dynamic = parts[currentPart++];
+			if (part is String)
+				part = mk(EConst(CString(cast part)));
+			else
+			{
+				switch (Tools.expr(part))
+				{
+					case EConst(c):
+						part = mk(EConst(c));
+					default:
+						part = mk(EParent(part));
+				}
+			}
+
+			if (e == null)
+				e = part;
+			else
+				e = makeBinop('+', e, part);
+		}
+		// trace(Printer.toString(e));
+		return e == null ? mk(EConst(CString(''))) : e;
 	}
 
 	function parseLambda( args : Array<Argument>, pmin:Int ) {
@@ -1842,17 +2002,9 @@ class Parser {
 				case "}".code: return TBrClose;
 				case "[".code: return TBkOpen;
 				case "]".code: return TBkClose;
-				case "'".code:
-					/**
-					 *
-					 *
-					 * EBlock
-					 *
-					 *
-					 */
-					var e = new Array();
-					return TConst( CString(readString(char)) );
-				case '"'.code: return TConst( CString(readString(char)) );
+				case "'".code if (allowStringInterpolation):
+					return TApostr;
+				case '"'.code, "'".code: return TConst( CString(readString(char)) );
 				case "?".code:
 					char = readChar();
 					switch (char) {
@@ -2130,6 +2282,7 @@ class Parser {
 			case TDoubleDot: ":";
 			case TMeta(id): "@" + id;
 			case TPrepro(id): "#" + id;
+			case TApostr: "<apostrophe>";
 		}
 	}
 
