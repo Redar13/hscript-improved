@@ -159,6 +159,7 @@ class Interp {
 		if (parentInterp != null) {
 			errorHandler = null;
 			importFailedCallback = null;
+			usingClasses = null;
 			onMetadata = null;
 			// staticVariables = null;
 			allowStaticVariables = allowPublicVariables = allowTypes = false;
@@ -181,6 +182,8 @@ class Interp {
 			allowStaticVariables = parentInterp.allowStaticVariables;
 			allowPublicVariables = parentInterp.allowPublicVariables;
 			allowTypes = parentInterp.allowTypes;
+			usingClasses = parentInterp.usingClasses;
+			usingEnabled = parentInterp.usingEnabled;
 			#if hscriptPos
 			var me = this;
 			variables.set("trace", UnsafeReflect.makeVarArgs(function(el) {
