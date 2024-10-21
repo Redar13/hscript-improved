@@ -891,7 +891,7 @@ class HScriptedClassMacro
 					pos: field.pos,
 					kind: FFun({
 						args: func_inputArgs,
-						params: func_params,
+						// params: func_params,
 						// ret: func_ret,
 						expr: macro
 						{
