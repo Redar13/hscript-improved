@@ -119,7 +119,7 @@ class Parser {
 		line = 1;
 		opChars = "+*/-=!><&|^%~";
 		identChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_";
-		var priorities = [
+		var priorities:Array<Array<String>> = [
 			["%"],
 			["*", "/"],
 			["+", "-"],
@@ -186,14 +186,14 @@ class Parser {
 			idents[identChars.charCodeAt(i)] = true;
 	}
 
-	public function parseString( s : String, ?origin : String = "hscript" ) {
+	public function parseString( s : String, ?origin : String = "hscript" ) : Expr {
 		initParser(origin);
 		if(s == "") s = "0;"; // fixing crash with empty file
 		input = s;
 		readPos = 0;
-		var a = new Array();
+		var a:Array<Expr> = new Array();
 		while( true ) {
-			var tk = token();
+			var tk:Token = token();
 			if( tk == TEof ) break;
 			push(tk);
 			parseFullExpr(a);
@@ -206,7 +206,7 @@ class Parser {
 		return null;
 	}
 
-	inline function push( tk:Token ) {
+	inline function push( tk:Token ):Void {
 		#if hscriptPos
 		tokens.push( { t : tk, min : tokenMin, max : tokenMax } );
 		tokenMin = oldTokenMin;
@@ -216,26 +216,26 @@ class Parser {
 		#end
 	}
 
-	inline function ensure( tk:Token ) {
+	inline function ensure( tk:Token ):Void {
 		var t = token();
 		if( t != tk ) unexpected(t);
 	}
 
-	inline function ensureToken( tk:Token ) {
-		var t = token();
+	inline function ensureToken( tk:Token ):Void {
+		var t:Token = token();
 		if( !Type.enumEq(t,tk) ) unexpected(t);
 	}
 
-	function maybe( tk:Token ) {
-		var t = token();
+	function maybe( tk:Token ):Bool {
+		var t:Token = token();
 		if( Type.enumEq(t, tk) )
 			return true;
 		push(t);
 		return false;
 	}
 
-	function getIdent() {
-		var tk = token();
+	function getIdent():String {
+		var tk:Token = token();
 		switch( tk ) {
 			case TId(id): return id;
 			default:
@@ -252,7 +252,7 @@ class Parser {
 		#end
 	}
 
-	inline function pmin(e:Expr) {
+	inline function pmin(e:Expr):Int {
 		#if hscriptPos
 		return e == null ? 0 : e.pmin;
 		#else
@@ -260,7 +260,7 @@ class Parser {
 		#end
 	}
 
-	inline function pmax(e:Expr) {
+	inline function pmax(e:Expr):Int {
 		#if hscriptPos
 		return e == null ? 0 : e.pmax;
 		#else
@@ -1005,6 +1005,55 @@ class Parser {
 						null;
 					}
 
+				case "using":
+					var oldReadPos = readPos;
+					var tk = token();
+					switch( tk ) {
+						case TPOpen:
+							var tok = token();
+							switch(tok) {
+								case TConst(c):
+									switch(c) {
+										case CString(s):
+											token();
+											ensure(TSemicolon);
+											push(TSemicolon);
+											mk(EUsing(s), p1);
+										default:
+											unexpected(tok);
+											null;
+									}
+								default:
+									unexpected(tok);
+									null;
+							}
+						case TId(id):
+							var path = [id];
+							var t = null;
+							var star:Bool = false;
+							while( true ) {
+								t = token();
+								if( t != TDot ) {
+									push(t);
+									break;
+								}
+								t = token();
+								switch( t ) {
+									case TId(id):
+										path.push(id);
+									default:
+										unexpected(t);
+								}
+							}
+							ensure(TSemicolon);
+							push(TSemicolon);
+							var p = path.join(".");
+							mk(EUsing(p), p1);
+						default:
+							unexpected(tk);
+							null;
+						}
+
 			case "class":
 				// example: class ClassName
 				var tk = token();
@@ -1089,6 +1138,10 @@ class Parser {
 					}
 				}*/
 
+				var oldOrigin = this.origin;
+				if (name != null)
+					this.origin += '.$name';
+					// this.origin += '(class:$name)';
 				var fields = [];
 				ensure(TBrOpen);
 				while( true ) {
@@ -1098,6 +1151,8 @@ class Parser {
 						break;
 					push(tk);
 				}
+
+				this.origin = oldOrigin;
 
 				var tk = token();
 				push(tk);
@@ -1622,12 +1677,17 @@ class Parser {
 							break;
 					}
 				}
+				var oldOrigin = this.origin;
+				if (name != null)
+					this.origin += '.$name';
+					// this.origin += '(class:$name)';
 
 				var fields = [];
 				ensure(TBrOpen);
 				while( !maybe(TBrClose) )
 					fields.push(parseField());
 
+				this.origin = oldOrigin;
 				return DClass({
 					name : name,
 					meta : meta,

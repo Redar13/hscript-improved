@@ -27,8 +27,7 @@ class Tools {
 	public static function iter( e : Expr, f : Expr -> Void ) {
 		switch( expr(e) ) {
 			case EConst(_), EIdent(_):
-			case EImport(c): f(e);
-			case EImportStar(c): f(e);
+			case EImport(c) | EImportStar(c) | EUsing(c): f(e);
 			case EClass(_, e, _, _): for( a in e ) f(a);
 			case EVar(_, _, e): if( e != null ) f(e);
 			case EParent(e): f(e);
@@ -92,6 +91,7 @@ class Tools {
 			case ECheckType(e,t): ECheckType(f(e), t);
 			case EImport(c): EImport(c);
 			case EImportStar(c): EImportStar(c);
+			case EUsing(c): EUsing(c);
 			case EClass(name, el, extend, interfaces): EClass(name, [for( e in el ) f(e)], extend, interfaces);
 		}
 		return mk(edef, e);

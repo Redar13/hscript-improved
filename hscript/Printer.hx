@@ -114,7 +114,9 @@ class Printer {
 			add("??NULL??");
 			return;
 		}
-		switch( #if hscriptPos e.e #else e #end ) {
+		switch (Tools.expr(e))  {
+			case EUsing(c):
+				add("using " + c);
 			case EImportStar(c):
 				add("import " + c + "*");
 			case EImport(c, n):

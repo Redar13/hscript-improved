@@ -84,6 +84,7 @@ enum Expr {
 
 	EImport( c : String, ?asname:String );
 	EImportStar( c : String );
+	EUsing( c : String );
 	EClass( name:String, fields:Array<Expr>, ?extend:String, interfaces:Array<String>, ?isFinal:Bool, ?isPrivate:Bool );
 }
 

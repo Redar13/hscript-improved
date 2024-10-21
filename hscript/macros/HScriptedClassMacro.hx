@@ -848,8 +848,8 @@ class HScriptedClassMacro
 
 							func_inputArgs.push({
 								name: arg.v.name,
-								type: type,
-								// type: Context.toComplexType(deparameterizeType(arg.v.t, targetParams)),
+								// type: type,
+								type: Context.toComplexType(deparameterizeType(arg.v.t, targetParams)),
 								// opt: isOptional,
 								meta: arg.v.meta.get(),
 								value: val,
@@ -873,13 +873,14 @@ class HScriptedClassMacro
 				var func_callArgs:Array<Expr> = [for (arg in func_inputArgs) macro $i{arg.name}];
 				// trace(func_inputArgs);
 
-				var func_params = [for (param in field.params) {name: param.name}];
-
-				if (field.params.length > 0)
-					trace(field.params);
+				// if (field.params.length > 0)
+				// {
+				// 	// trace('${field.name}:\n\t\t${field.params} -> ${func_params}\n\t${func_callArgs}');
+				// 	trace('${field.name}: ${[for (i in func_inputArgs) i.name]}');
+				// }
 				// Context.info('  Processing return of function "${field.name}"', Context.currentPos());
 				// var func_ret = doesReturnVoid ? null : Context.toComplexType(deparameterizeType(ret, targetParams));
-				var func_ret = doesReturnVoid ? null : Context.toComplexType(ret);
+				//  var func_ret = doesReturnVoid ? null : Context.toComplexType(Context.follow(ret));
 
 				var funcName:String = field.name;
 				var func_over:Field = {
@@ -890,7 +891,7 @@ class HScriptedClassMacro
 					pos: field.pos,
 					kind: FFun({
 						args: func_inputArgs,
-						// params: func_params,
+						params: func_params,
 						// ret: func_ret,
 						expr: macro
 						{

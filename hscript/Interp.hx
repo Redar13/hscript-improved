@@ -200,6 +200,7 @@ class Interp {
 	public var onMetadata:String->Array<Expr>->Expr->Dynamic;
 	public var customClasses:HXStringMap<Dynamic>;
 	public var variables:HXStringMap<Dynamic>;
+	public var usingClasses:List<Class<Dynamic>>;
 	public var publicVariables:HXStringMap<Dynamic>;
 	public var staticVariables:HXStringMap<Dynamic>;
 
@@ -214,6 +215,7 @@ class Interp {
 
 	var isBypassAccessor:Bool = false;
 
+	public var usingEnabled:Bool = true;
 	public var importEnabled:Bool = true;
 
 	public var allowStaticVariables:Bool = false;
@@ -224,6 +226,7 @@ class Interp {
 		// "flixel.FlxG"
 	];
 
+	var __staticId:String;
 	var __instanceFields:Array<String> = [];
 	#if hscriptPos
 	var curExpr:Expr;
@@ -241,6 +244,7 @@ class Interp {
 	}
 
 	private function resetVariables() {
+		usingClasses = new List<Class<Dynamic>>();
 		customClasses = new HXStringMap<Dynamic>();
 		variables = new HXStringMap<Dynamic>();
 		publicVariables = new HXStringMap<Dynamic>();
@@ -400,8 +404,21 @@ class Interp {
 		}
 	}
 
+	public inline function getCurOrigin():String
+	{
+		return #if hscriptPos
+			curExpr.origin;
+		#else
+			"hscript";
+		#end
+	}
+	public inline function getStaticVariableName(name:String):String
+	{
+		return getCurOrigin() + ":" + name;
+	}
+
 	public function varExists(name:String):Bool {
-		return allowStaticVariables && staticVariables.exists(name) || allowPublicVariables && publicVariables.exists(name) || variables.exists(name);
+		return allowStaticVariables && staticVariables.exists(getStaticVariableName(name)) || allowPublicVariables && publicVariables.exists(name) || variables.exists(name);
 	}
 
 	public function findScriptClassDescriptor(name:String) {
@@ -416,8 +433,8 @@ class Interp {
 				UnsafeReflect.field(_proxy.superClass, 'set_$name')(v);
 			}
 		}
-		if (allowStaticVariables && staticVariables.exists(name))
-			staticVariables.set(name, v);
+		if (allowStaticVariables && staticVariables.exists(__staticId = getStaticVariableName(name)))
+			staticVariables.set(__staticId, v);
 		else if (allowPublicVariables && publicVariables.exists(name))
 			publicVariables.set(name, v);
 		else
@@ -767,8 +784,8 @@ class Interp {
 			return variables.get(id);
 		if (publicVariables.exists(id))
 			return publicVariables.get(id);
-		if (staticVariables.exists(id))
-			return staticVariables.get(id);
+		if (staticVariables.exists(__staticId = getStaticVariableName(id)))
+			return staticVariables.get(__staticId);
 		// if (customClasses.exists(id))
 		// 	return customClasses.get(id);
 
@@ -780,11 +797,13 @@ class Interp {
 			var instanceHasField = __instanceFields.contains(id);
 
 			switch (_scriptObjectType) {
-				case SObject if (instanceHasField):
-					return UnsafeReflect.field(scriptObject, id);
+				case SObject:
+					if (instanceHasField)
+						return UnsafeReflect.field(scriptObject, id);
 				// case SCustomClass:
 				case SBehaviourClass:
-					return cast(scriptObject, IHScriptCustomBehaviour).hget(id);
+					if (instanceHasField)
+						return cast(scriptObject, IHScriptCustomBehaviour).hget(id);
 				default:
 					if (instanceHasField) {
 						if (isBypassAccessor) {
@@ -805,6 +824,25 @@ class Interp {
 			var cl:Class<Dynamic> = Type.resolveClass(id); // now you can do this thing: var a:haxe.io.Path = new haxe.io.Path();  yee
 			if (cl == null)
 				cl = Type.resolveClass('${id}_HSC');
+			/*
+			if (cl == null)
+			{
+				var lastDot = id.lastIndexOf(".");
+				if (lastDot != -1) // try get static variable
+				{
+					var idPost = id.substring(0, lastDot);
+					cl = Type.resolveClass(idPost);
+					if (cl == null)
+						cl = Type.resolveClass('${idPost}_HSC');
+					if (cl != null)
+					{
+						variables.set(id, cl);
+						return cl;
+					}
+				}
+			}
+			else
+			*/
 			if (cl != null) {
 				variables.set(id, cl);
 				return cl;
@@ -841,6 +879,19 @@ class Interp {
 					customClasses.set(name, new PolymodScriptClass(this, name, fields, importVar(extend), [for (i in interfaces) importVar(i)]));
 				 */
 				customClasses.set(name, e);
+			case EUsing(pkg):
+				if (!usingEnabled)
+					return null;
+				trace(pkg);
+				var cl = Type.resolveClass(pkg);
+				// if (cl == null)
+				// 	cl = Type.resolveClass('${realClassName}_HSC');
+
+				if (cl == null)
+				// if (importFailedCallback == null || !importFailedCallback(pkg.split(".")))
+					error(EInvalidClass(pkg.substr(pkg.lastIndexOf(".") + 1)));
+				usingClasses.add(cl);
+				return null;
 			case EImportStar(pkg):
 				#if !macro
 				if (!importEnabled)
@@ -988,13 +1039,14 @@ class Interp {
 				declared.push({n: n, old: locals.get(n), depth: depth});
 				locals.set(n, {r: initExpr, depth: depth});
 				if (depth == 0) {
-					if (isStatic == true) {
+					if (isStatic == true && allowStaticVariables) {
+						n = getStaticVariableName(n);
 						if (!staticVariables.exists(n)) {
 							staticVariables.set(n, initExpr);
 						}
 						return null;
 					}
-					(isPublic ? publicVariables : variables).set(n, initExpr);
+					(isPublic && allowPublicVariables ? publicVariables : variables).set(n, initExpr);
 				}
 				return null;
 			case EBlock(exprs):
@@ -1067,10 +1119,10 @@ class Interp {
 				returnValue = e == null ? null : expr(e);
 				throw SReturn;
 			case EFunction(params, fexpr, name, type, isPublic, isStatic, isOverride):
-				var capturedLocals:Map<String, DeclaredVar> = [];
-				for (k => e in locals)
+				var capturedLocals:Map<String, DeclaredVar> = [for (k => e in locals)
 					if (e != null && e.depth > 0)
-						capturedLocals.set(k, e);
+						k => e
+				];
 
 				var me:Interp = this;
 				var hasOpt:Bool = false;
@@ -1141,8 +1193,14 @@ class Interp {
 				if (name != null) {
 					if (depth == 0) {
 						// global function
-						((isStatic && allowStaticVariables) ? staticVariables : ((isPublic && allowPublicVariables) ? publicVariables : variables)).set(name,
-							f);
+						if (isStatic && allowStaticVariables)
+						{
+							staticVariables.set(getStaticVariableName(name), f);
+						}
+						else
+						{
+							((isPublic && allowPublicVariables) ? publicVariables : variables).set(name, f);
+						}
 					} else {
 						// function-in-function is a local function
 						declared.push({n: name, old: locals.get(name), depth: depth});
@@ -1500,6 +1558,7 @@ class Interp {
 		if (v == null && (v = Reflect.getProperty(o, f)) == null) {
 			v = Reflect.getProperty(cls, f);
 		}
+
 		return v;
 	}
 
@@ -1584,15 +1643,26 @@ class Interp {
 			return UnsafeReflect.field(o, "_asc").callFunction(f, args);
 		}
 
-		var func = get(o, f);
+		var func:Function = get(o, f);
 
-		#if html
+		if (func == null) {
+			for (i in usingClasses)
+			{
+				func = Reflect.field(i, f); // todo?: ignore @:noUsing
+				if (func != null)
+				{
+					args.insert(0, o);
+					break;
+				}
+			}
+		}
+		// #if html
 		// Workaround for an HTML5-specific issue.
 		// https://github.com/HaxeFoundation/haxe/issues/11298
 		if (func == null && f == "contains") {
 			func = get(o, "includes");
 		}
-		#end
+		// #end
 
 		// if(func == null && o == scriptObject && _scriptObjectType == SCustomClass) {
 		// 	return UnsafeReflect.callMethod(scriptObject, UnsafeReflect.field(scriptObject, "__hsx_super_" + f), args);
