@@ -885,7 +885,6 @@ class Interp {
 			case EUsing(pkg):
 				if (!usingEnabled)
 					return null;
-				trace(pkg);
 				var cl = Type.resolveClass(pkg);
 				// if (cl == null)
 				// 	cl = Type.resolveClass('${realClassName}_HSC');
@@ -1721,7 +1720,7 @@ class Interp {
 
 				final variable:Class<Dynamic> = customClasses.exists(extend) ? null : resolve(extend, false);
 				if (UnsafeReflect.hasField(variable, "__hsx_init")) {
-					trace(variable);
+					// trace(variable);
 					return UnsafeReflect.field(variable, "__hsx_init")(cl, this, args);
 				}
 				scriptedCls = variable == null ? extend : Type.getClassName(variable);
@@ -1751,7 +1750,7 @@ class Interp {
 						return null;
 					final variable:Class<Dynamic> = customClasses.exists(thing) ? null : resolve(thing); // TODO: Allow extend inner scripted class
 					if (variable != null && UnsafeReflect.hasField(variable, "__hsx_init")) {
-						trace(variable);
+						// trace(variable);
 						return variable;
 					}
 					return variable == null ? null : Type.resolveClass('${Type.getClassName(variable)}_HSX');
