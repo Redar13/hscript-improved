@@ -159,14 +159,14 @@ class Interp {
 		if (parentInterp != null) {
 			errorHandler = null;
 			importFailedCallback = null;
-			usingClasses = null;
+			usingFunctions = null;
 			onMetadata = null;
 			// staticVariables = null;
 			allowStaticVariables = allowPublicVariables = allowTypes = false;
 			#if hscriptPos
 			variables.set("trace", UnsafeReflect.makeVarArgs(function(el) {
-				var inf = posInfos();
-				var v = el.shift();
+				var inf:PosInfos = posInfos();
+				var v:Null<Dynamic> = el.shift();
 				if (el.length > 0)
 					inf.customParams = el;
 				haxe.Log.trace(Std.string(v), inf);
@@ -182,7 +182,7 @@ class Interp {
 			allowStaticVariables = parentInterp.allowStaticVariables;
 			allowPublicVariables = parentInterp.allowPublicVariables;
 			allowTypes = parentInterp.allowTypes;
-			usingClasses = parentInterp.usingClasses;
+			usingFunctions = parentInterp.usingFunctions;
 			usingEnabled = parentInterp.usingEnabled;
 			#if hscriptPos
 			var me = this;
@@ -203,7 +203,7 @@ class Interp {
 	public var onMetadata:String->Array<Expr>->Expr->Dynamic;
 	public var customClasses:HXStringMap<Dynamic>;
 	public var variables:HXStringMap<Dynamic>;
-	public var usingClasses:List<Class<Dynamic>>;
+	public var usingFunctions:HXStringMap<Function>;
 	public var publicVariables:HXStringMap<Dynamic>;
 	public var staticVariables:HXStringMap<Dynamic>;
 
@@ -247,7 +247,7 @@ class Interp {
 	}
 
 	private function resetVariables() {
-		usingClasses = new List<Class<Dynamic>>();
+		usingFunctions = new HXStringMap<Function>();
 		customClasses = new HXStringMap<Dynamic>();
 		variables = new HXStringMap<Dynamic>();
 		publicVariables = new HXStringMap<Dynamic>();
@@ -257,8 +257,8 @@ class Interp {
 		variables.set("true", true);
 		variables.set("false", false);
 		variables.set("trace", UnsafeReflect.makeVarArgs(function(el) {
-			var inf = posInfos();
-			var v = el.shift();
+			var inf:PosInfos = posInfos();
+			var v:Null<Dynamic> = el.shift();
 			if (el.length > 0)
 				inf.customParams = el;
 			haxe.Log.trace(Std.string(v), inf);
@@ -892,7 +892,13 @@ class Interp {
 				if (cl == null)
 				// if (importFailedCallback == null || !importFailedCallback(pkg.split(".")))
 					error(EInvalidClass(pkg.substr(pkg.lastIndexOf(".") + 1)));
-				usingClasses.add(cl);
+				var func:Dynamic;
+				for (i in Type.getClassFields(cl))
+				{
+					func = UnsafeReflect.field(cl, i);
+					if (func != null && UnsafeReflect.isFunction(func))
+						usingFunctions.set(i, func);
+				}
 				return null;
 			case EImportStar(pkg):
 				#if !macro
@@ -1647,16 +1653,9 @@ class Interp {
 
 		var func:Function = get(o, f);
 
-		if (func == null) {
-			for (i in usingClasses)
-			{
-				func = Reflect.field(i, f); // todo?: ignore @:noUsing
-				if (func != null)
-				{
-					args.insert(0, o);
-					break;
-				}
-			}
+		if (func == null && (func = usingFunctions.get(f)) != null) // todo?: ignore @:noUsing
+		{
+			args.insert(0, o);
 		}
 		// #if html
 		// Workaround for an HTML5-specific issue.
