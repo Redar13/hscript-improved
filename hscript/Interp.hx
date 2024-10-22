@@ -1100,6 +1100,12 @@ class Interp {
 					case EField(e, f, s):
 						var obj = expr(e);
 						if (obj == null) {
+							var maybeFunc = usingFunctions.get(f);
+							if (maybeFunc != null)
+							{
+								args.insert(0, null);
+								return call(null, maybeFunc, args);
+							}
 							if (s)
 								return null;
 							error(EInvalidAccess(f));
@@ -1656,6 +1662,7 @@ class Interp {
 		if (func == null && (func = usingFunctions.get(f)) != null) // todo?: ignore @:noUsing
 		{
 			args.insert(0, o);
+			return call(o, func, args);
 		}
 		// #if html
 		// Workaround for an HTML5-specific issue.
