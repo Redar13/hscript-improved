@@ -3,7 +3,9 @@ package hscript;
 /**
  * This interface triggers the execution of a macro which redirects all function calls to a scripted class.
  */
+#if !display
 @:autoBuild(hscript.macros.HScriptedClassMacro.build())
+#end
 interface HScriptedClass
 {
 	 // The following functions ARE REAL, and are generated and applied to any class that implements this interface.
