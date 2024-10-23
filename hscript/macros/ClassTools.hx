@@ -36,7 +36,7 @@ class ClassTools
 			switch t
 			{
 				case TMono(c):
-					if (t != null)
+					if (c != null)
 					{
 						onGenerate(c.get());
 					}
