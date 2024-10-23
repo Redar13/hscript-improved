@@ -1188,13 +1188,14 @@ class Parser {
 				ensureToken(TId("catch"));
 				ensure(TPOpen);
 				var vname = getIdent();
-				ensure(TDoubleDot);
+				var tk = token();
 				var t = null;
-				if( allowTypes )
+				if( allowTypes && tk == TDoubleDot) {
 					t = parseType();
-				else
-					ensureToken(TId("Dynamic"));
-				ensure(TPClose);
+				}
+				if( tk != TPClose) {
+					ensure(TPClose);
+				}
 				var ec = parseExpr();
 				mk(ETry(e, vname, t, ec), p1, pmax(ec));
 			case "switch":
