@@ -72,7 +72,7 @@ class UsingHandler {
 			for(f in fields)
 				switch(f.kind) {
 					case FFun(fun):
-						/* // TODO: Allow non static functions
+						/*
 						if (f.access.contains(AMacro))
 							continue;
 						for (i in fun.args)

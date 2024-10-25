@@ -29,18 +29,19 @@
 package hscript;
 
 import haxe.Constraints.Function;
-import haxe.display.Protocol.InitializeResult;
-import haxe.iterators.StringKeyValueIteratorUnicode;
+import haxe.Constraints.IMap;
 import haxe.EnumTools;
 import haxe.PosInfos;
-import haxe.Constraints.IMap;
+import haxe.display.Protocol.InitializeResult;
+import haxe.ds.StringMap;
+import haxe.iterators.StringKeyValueIteratorUnicode;
+import hscript.Expr;
+import hscript.HScriptedClass;
+import hscript.UnsafeReflect;
 import hscript.custom_classes.PolymodAbstractScriptClass;
 import hscript.custom_classes.PolymodClassDeclEx;
 import hscript.custom_classes.PolymodScriptClass;
 import hscript.macros.ClassTools;
-import hscript.Expr;
-import hscript.HScriptedClass;
-import hscript.UnsafeReflect;
 
 using StringTools;
 
@@ -89,8 +90,6 @@ private enum Stop {
 	SContinue;
 	SReturn;
 }
-
-typedef HXStringMap<T> = #if haxe3 Map<String, T> #else Hash<T> #end;
 
 @:access(hscript.HScriptedClass)
 class Interp {
@@ -201,15 +200,15 @@ class Interp {
 	public var errorHandler:Error->Void;
 	public var importFailedCallback:Array<String>->Bool;
 	public var onMetadata:String->Array<Expr>->Expr->Dynamic;
-	public var customClasses:HXStringMap<Dynamic>;
-	public var variables:HXStringMap<Dynamic>;
-	public var usingFunctions:HXStringMap<Function>;
-	public var publicVariables:HXStringMap<Dynamic>;
-	public var staticVariables:HXStringMap<Dynamic>;
+	public var customClasses:StringMap<Dynamic>;
+	public var variables:StringMap<Dynamic>;
+	public var usingFunctions:StringMap<Function>;
+	public var publicVariables:StringMap<Dynamic>;
+	public var staticVariables:StringMap<Dynamic>;
 
-	public var locals:HXStringMap<DeclaredVar>;
+	public var locals:StringMap<DeclaredVar>;
 
-	var binops:HXStringMap<Expr->Expr->Dynamic>;
+	var binops:StringMap<Expr->Expr->Dynamic>;
 
 	var depth:Int = 0;
 	var inTry:Bool;
@@ -238,7 +237,7 @@ class Interp {
 	var _proxy:PolymodAbstractScriptClass = null;
 
 	public function new(?targetObj:Dynamic) {
-		locals = new HXStringMap();
+		locals = new StringMap();
 		declared = new Array();
 		resetVariables();
 		initOps();
@@ -247,11 +246,11 @@ class Interp {
 	}
 
 	private function resetVariables() {
-		usingFunctions = new HXStringMap<Function>();
-		customClasses = new HXStringMap<Dynamic>();
-		variables = new HXStringMap<Dynamic>();
-		publicVariables = new HXStringMap<Dynamic>();
-		staticVariables = new HXStringMap<Dynamic>();
+		usingFunctions = new StringMap<Function>();
+		customClasses = new StringMap<Dynamic>();
+		variables = new StringMap<Dynamic>();
+		publicVariables = new StringMap<Dynamic>();
+		staticVariables = new StringMap<Dynamic>();
 
 		variables.set("null", null);
 		variables.set("true", true);
@@ -275,7 +274,7 @@ class Interp {
 
 	function initOps() {
 		var me = this;
-		binops = new HXStringMap();
+		binops = new StringMap();
 		binops.set("+", function(e1, e2) return me.expr(e1) + me.expr(e2));
 		binops.set("-", function(e1, e2) return me.expr(e1) - me.expr(e2));
 		binops.set("*", function(e1, e2) return me.expr(e1) * me.expr(e2));
@@ -301,12 +300,7 @@ class Interp {
 			var expr1:Dynamic = me.expr(e1);
 			return expr1 == null ? me.expr(e2) : expr1;
 		});
-		binops.set("...", function(e1, e2) return new
-			#if (haxe_211 || haxe3)
-			IntIterator
-			#else
-			IntIter
-			#end(me.expr(e1), me.expr(e2)));
+		binops.set("...", function(e1, e2) return new IntIterator(me.expr(e1), me.expr(e2)));
 		assignOp("+=", function(v1:Dynamic, v2:Dynamic) return v1 + v2);
 		assignOp("-=", function(v1:Float, v2:Float) return v1 - v2);
 		assignOp("*=", function(v1:Float, v2:Float) return v1 * v2);
@@ -704,7 +698,7 @@ class Interp {
 
 	public function execute(expr:Expr):Dynamic {
 		depth = 0;
-		locals = new HXStringMap();
+		locals = new StringMap();
 		declared = new Array();
 		return exprReturn(expr);
 	}
@@ -740,8 +734,8 @@ class Interp {
 		return null;
 	}
 
-	public function duplicate<T>(h:HXStringMap<T>) {
-		var h2 = new HXStringMap<T>();
+	public function duplicate<T>(h:StringMap<T>) {
+		var h2 = new StringMap<T>();
 		for (k in h.keys())
 			h2.set(k, h.get(k));
 		return h2;
@@ -1030,9 +1024,6 @@ class Interp {
 					case CInt(v): return v;
 					case CFloat(f): return f;
 					case CString(s): return s;
-					#if !haxe3
-					case CInt32(v): return v;
-					#end
 				}
 			case EIdent(id):
 				var l = locals.get(id);
@@ -1085,7 +1076,7 @@ class Interp {
 					case "--":
 						return increment(e, prefix, -1);
 					case "~":
-						#if (neko && !haxe3)
+						#if neko
 						return haxe.Int32.complement(expr(e));
 						#else
 						return ~expr(e);
@@ -1095,7 +1086,6 @@ class Interp {
 				}
 			case ECall(e, params):
 				var args = [for (p in params) expr(p)];
-
 				switch (Tools.expr(e)) {
 					case EField(e, f, s):
 						var obj = expr(e);
@@ -1414,7 +1404,7 @@ class Interp {
 		_scriptClassDescriptors.set(name, c);
 	}
 
-	private var _scriptClassDescriptors:HXStringMap<ClassDeclEx> = new HXStringMap<ClassDeclEx>();
+	private var _scriptClassDescriptors:StringMap<ClassDeclEx> = new StringMap<ClassDeclEx>();
 
 	function whileLoop(econd, e) {
 		var old = declared.length;
@@ -1502,8 +1492,8 @@ class Interp {
 		cast(map, IMap<Dynamic, Dynamic>).set(key, value);
 	}
 
-	public static var getRedirects:HXStringMap<(Dynamic, String) -> Dynamic> = [];
-	public static var setRedirects:HXStringMap<(Dynamic, String, Dynamic) -> Dynamic> = [];
+	public static var getRedirects:StringMap<(Dynamic, String) -> Dynamic> = new StringMap();
+	public static var setRedirects:StringMap<(Dynamic, String, Dynamic) -> Dynamic> = new StringMap();
 
 	private static var _getRedirect:Dynamic->String->Dynamic;
 	private static var _setRedirect:Dynamic->String->Dynamic->Dynamic;
@@ -1529,7 +1519,7 @@ class Interp {
 		var cls = Type.getClass(o);
 		if (useRedirects && {
 			var cl:Null<String> = getClassType(o, cls);
-			cl != null && (_getRedirect = getRedirects[cl]) != null;
+			cl != null && (_getRedirect = getRedirects.get(cl)) != null;
 		}) {
 			return _getRedirect(o, f);
 		}
@@ -1582,7 +1572,7 @@ class Interp {
 
 		if (useRedirects && {
 			var cl:Null<String> = getClassType(o);
-			cl != null && (_setRedirect = setRedirects[cl]) != null;
+			cl != null && (_setRedirect = setRedirects.get(cl)) != null;
 		})
 			return _setRedirect(o, f, v);
 		// if (o is HScriptedClass)

@@ -63,6 +63,12 @@ class ClassTools
 					{
 						allClassesAvailable.push(getModulePath(c));
 					}
+				case TAbstract(t, _params):
+					var abstractPath = t.toString();
+					if (t.get().impl != null)
+					{
+						allClassesAvailable.push(abstractPath);
+					}
 				default:
 			}
 		}

@@ -870,6 +870,11 @@ class HScriptedClassMacro
 				// Generate the list of call arguments for the function.
 				// Context.info('${args}', Context.currentPos());
 				// var func_callArgs:Array<Expr> = [for (arg in args) macro $i{arg.name}];
+				var func_params = [for (param in field.params) {
+					name: param.name,
+					// constraints: [Context.toComplexType(deparameterizeType(param.t, targetParams))],
+					defaultType: Context.toComplexType(param.defaultType == null ? deparameterizeType(param.t, targetParams) : deparameterizeType(param.defaultType, targetParams))
+				}];
 				var func_callArgs:Array<Expr> = [for (arg in func_inputArgs) macro $i{arg.name}];
 				// trace(func_inputArgs);
 

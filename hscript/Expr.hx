@@ -21,13 +21,13 @@
  */
 package hscript;
 
-typedef Int8 = #if cpp cpp.Int8 #else Int #end;
-typedef Int16 = #if cpp cpp.Int16 #else Int #end;
+typedef Int8 = #if cpp cpp.Int8 #elseif cs cs.Int8 #elseif java java.Int8 #else Int #end;
+typedef Int16 = #if cpp cpp.Int16 #elseif cs cs.Int16 #elseif java java.Int16 #else Int #end;
 typedef Int32 = #if cpp cpp.Int32 #else Int #end;
-typedef Int64 = #if cpp cpp.Int64 #else Int #end;
+typedef Int64 = #if cpp cpp.Int64 #elseif cs cs.Int64 #elseif java java.Int64 #else Int  Int #end;
 
-typedef UInt8 = #if cpp cpp.UInt8 #else Int #end;
-typedef UInt16 = #if cpp cpp.UInt16 #else Int #end;
+typedef UInt8 = #if cpp cpp.UInt8 #elseif cs cs.UInt8 #else Int #end;
+typedef UInt16 = #if cpp cpp.UInt16 #elseif cs cs.UInt16 #else Int #end;
 typedef UInt32 = #if cpp cpp.UInt32 #else Int #end;
 typedef UInt64 = #if cpp cpp.UInt64 #else Int #end;
 
@@ -35,9 +35,6 @@ enum Const {
 	CInt( v : Int );
 	CFloat( f : Float );
 	CString( s : String );
-	#if !haxe3
-	CInt32( v : haxe.Int32 );
-	#end
 }
 
 #if hscriptPos
