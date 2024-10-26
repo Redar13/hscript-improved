@@ -51,38 +51,38 @@ enum ExprDef {
 typedef ExprDef = Expr;
 enum Expr {
 #end
-	EConst( c : Const );
-	EIdent( v : String );
-	EVar( n : String, ?t : CType, ?e : Expr, ?isPublic : Bool, ?isStatic : Bool, ?isPrivate : Bool, ?isFinal : Bool, ?isInline : Bool );
-	EParent( e : Expr );
-	EBlock( e : Array<Expr> );
-	EField( e : Expr, f : String , ?safe : Bool );
-	EBinop( op : String, e1 : Expr, e2 : Expr );
-	EUnop( op : String, prefix : Bool, e : Expr );
-	ECall( e : Expr, params : Array<Expr> );
-	EIf( cond : Expr, e1 : Expr, ?e2 : Expr );
-	EWhile( cond : Expr, e : Expr );
-	EFor( v : String, it : Expr, e : Expr, ?ithv: String);
-	EBreak;
-	EContinue;
-	EFunction( args : Array<Argument>, e : Expr, ?name : String, ?ret : CType, ?isPublic : Bool, ?isStatic : Bool, ?isOverride : Bool, ?isPrivate : Bool, ?isFinal : Bool, ?isInline : Bool );
-	EReturn( ?e : Expr );
-	EArray( e : Expr, index : Expr );
-	EArrayDecl( e : Array<Expr>, ?wantedType: CType );
-	ENew( cl : String, params : Array<Expr> );
-	EThrow( e : Expr );
-	ETry( e : Expr, v : String, t : Null<CType>, ecatch : Expr );
-	EObject( fl : Array<{ name : String, e : Expr }> );
-	ETernary( cond : Expr, e1 : Expr, e2 : Expr );
-	ESwitch( e : Expr, cases : Array<SwitchCase>, ?defaultExpr : Expr );
-	EDoWhile( cond : Expr, e : Expr);
-	EMeta( name : String, args : Array<Expr>, e : Expr );
-	ECheckType( e : Expr, t : CType );
+	EConst( c : Const ); // Const int, flaot and string
+	EIdent( v : String ); // get variable
+	EVar( n : String, ?t : CType, ?e : Expr, ?isPublic : Bool, ?isStatic : Bool, ?isPrivate : Bool, ?isFinal : Bool, ?isInline : Bool ); // init var (var a:Float = 5;)
+	EParent( e : Expr ); // ( expr )
+	EBlock( e : Array<Expr> ); // { expr }
+	EField( e : Expr, f : String , ?safe : Bool ); // var.field
+	EBinop( op : String, e1 : Expr, e2 : Expr ); // var == 0, var >= 5
+	EUnop( op : String, prefix : Bool, e : Expr ); // !var, var++
+	ECall( e : Expr, params : Array<Expr> ); // myFunction(5, 6)
+	EIf( cond : Expr, e1 : Expr, ?e2 : Expr ); // if (var == 5){ expr } else { expr }
+	EWhile( cond : Expr, e : Expr ); // while (var == 5) { expr }
+	EFor( v : String, it : Expr, e : Expr, ?ithv: String); // for (i in 0...8) { expr }
+	EBreak; // break
+	EContinue; // continue
+	EFunction( args : Array<Argument>, e : Expr, ?name : String, ?ret : CType, ?isPublic : Bool, ?isStatic : Bool, ?isOverride : Bool, ?isPrivate : Bool, ?isFinal : Bool, ?isInline : Bool ); // init function (function(argA, argB:Float) { expr } or (argA, argB:Float) -> { expr })
+	EReturn( ?e : Expr ); // function() { return 0; }
+	EArray( e : Expr, index : Expr ); // myArray[0]
+	EArrayDecl( e : Array<Expr>, ?wantedType: CType ); // [1, 2, 3, 4, 5]
+	ENew( cl : String, params : Array<Expr> ); // new MyClass(5, 8)
+	EThrow( e : Expr ); // throw "Err";
+	ETry( e : Expr, v : String, t : Null<CType>, ecatch : Expr ); // try { expr } catch(e) { expr }
+	EObject( fl : Array<{ name : String, e : Expr }> ); // { a: 5, b: 7, c: 4}
+	ETernary( cond : Expr, e1 : Expr, e2 : Expr ); // a == true ? expr : expr
+	ESwitch( e : Expr, cases : Array<SwitchCase>, ?defaultExpr : Expr ); // switch(e) { case 5: expr default: expr}
+	EDoWhile( cond : Expr, e : Expr); // do { expr } while (var == 5)
+	EMeta( name : String, args : Array<Expr>, e : Expr ); // @:access(flixel.FlxG)
+	ECheckType( e : Expr, t : CType ); // (dynamic : FlxSprite)
 
-	EImport( c : String, ?asname:String );
-	EImportStar( c : String );
-	EUsing( c : String );
-	EClass( name:String, fields:Array<Expr>, ?extend:String, interfaces:Array<String>, ?isFinal:Bool, ?isPrivate:Bool );
+	EImport( c : String, ?asname:String ); // import flixel.FlxSprite as Sprite;
+	EImportStar( c : String ); // import flixel.*;
+	EUsing( c : String ); // using StringTools;
+	EClass( name:String, fields:Array<Expr>, ?extend:String, interfaces:Array<String>, ?isFinal:Bool, ?isPrivate:Bool ); // Class MyClass { expr }
 }
 
 @:structInit

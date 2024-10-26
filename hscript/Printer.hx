@@ -197,13 +197,13 @@ class Printer {
 			case ECall(e, args):
 				if( e == null )
 					expr(e);
-				else switch( #if hscriptPos e.e #else e #end ) {
-				case EField(_), EIdent(_), EConst(_):
-					expr(e);
-				default:
-					add("(");
-					expr(e);
-					add(")");
+				else switch( Tools.expr(e) ) {
+					case EField(_), EIdent(_), EConst(_):
+						expr(e);
+					default:
+						add("(");
+						expr(e);
+						add(")");
 				}
 				add("(");
 				var first = true;

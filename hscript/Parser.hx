@@ -69,9 +69,16 @@ class Parser {
 	public var allowTypes : Bool;
 
 	/**
+		allow regular expressions
+	**/
+	public var allowEreg : Bool;
+
+	/**
 		allow haxe metadata declarations
 	**/
 	public var allowMetadata : Bool;
+
+	public var convertPreProcValsToStr : Bool;
 
 	/**
 		resume from parsing errors (when parsing incomplete code, during completion for example)
@@ -108,6 +115,7 @@ class Parser {
 
 	public function new() {
 		line = 1;
+		convertPreProcValsToStr = true;
 		opChars = "+*/-=!><&|^%~";
 		identChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_";
 		var priorities:Array<Array<String>> = [
@@ -126,8 +134,8 @@ class Parser {
 		];
 		opPriority = new Map();
 		opRightAssoc = new Map();
-		for( i in 0...priorities.length )
-			for( x in priorities[i] ) {
+		for( i => arrPri in priorities )
+			for( x in arrPri ) {
 				opPriority.set(x, i);
 				if( i == 9 ) opRightAssoc.set(x, true);
 			}
@@ -723,18 +731,18 @@ class Parser {
 		if( e == null && resumeErrors )
 			return mk(EBinop(op,e1,e),pmin(e1),pmax(e1));
 		return switch( expr(e) ) {
-		case EBinop(op2,e2,e3):
-			if( opPriority.get(op) <= opPriority.get(op2) && !opRightAssoc.exists(op) )
-				mk(EBinop(op2,makeBinop(op,e1,e2),e3),pmin(e1),pmax(e3));
-			else
-				mk(EBinop(op, e1, e), pmin(e1), pmax(e));
-		case ETernary(e2,e3,e4):
-			if( opRightAssoc.exists(op) )
+			case EBinop(op2,e2,e3):
+				if( opPriority.get(op) <= opPriority.get(op2) && !opRightAssoc.exists(op) )
+					mk(EBinop(op2,makeBinop(op,e1,e2),e3),pmin(e1),pmax(e3));
+				else
+					mk(EBinop(op, e1, e), pmin(e1), pmax(e));
+			case ETernary(e2,e3,e4):
+				if( opRightAssoc.exists(op) )
+					mk(EBinop(op,e1,e),pmin(e1),pmax(e));
+				else
+					mk(ETernary(makeBinop(op, e1, e2), e3, e4), pmin(e1), pmax(e));
+			default:
 				mk(EBinop(op,e1,e),pmin(e1),pmax(e));
-			else
-				mk(ETernary(makeBinop(op, e1, e2), e3, e4), pmin(e1), pmax(e));
-		default:
-			mk(EBinop(op,e1,e),pmin(e1),pmax(e));
 		}
 	}
 
@@ -2137,29 +2145,79 @@ class Parser {
 		}
 	}
 
+	function getValFromExpr( e : Expr, ?waitFloat:Bool ):Dynamic
+	{
+		var edef:ExprDef = expr(e);
+		switch( edef )
+		{
+			case EParent(e):
+				return getValFromExpr(e, waitFloat);
+			case EIdent(id):
+				return preprocValue(id);
+			case EConst(c):
+				switch (c) {
+					case CInt(v): return waitFloat || convertPreProcValsToStr ? Std.string(v) : v;
+					case CFloat(f): return waitFloat || convertPreProcValsToStr ? Std.string(f) : f;
+					case CString(s): return s;
+				}
+			case ECall(expr(_) => EIdent("version"), expr(_[0]) => EConst(CString(s))): // this thing exists lol
+				return s;
+			// ?todo: allow more
+			default:
+				error(EInvalidPreprocessor(edef.getName()), readPos, readPos);
+				return null;
+		}
+	}
+
 	function evalPreproCond( e : Expr ):Bool {
-		switch( expr(e) ) {
+		// trace(Printer.toString(e));
+		var edef:ExprDef = expr(e);
+		switch( edef ) {
 			case EIdent(id):
 				return preprocValue(id) != null;
 			case EField(e2, f):
 				switch(expr(e2)) {
 					case EIdent(id):
 						return preprocValue(id + "." + f) != null;
-					default:
-						error(EInvalidPreprocessor("Can't eval " + expr(e).getName() + " with " + expr(e2).getName()), readPos, readPos);
+					case edef2:
+						error(EInvalidPreprocessor("Can't eval " + edef.getName() + " with " + edef2.getName()), readPos, readPos);
 						return false;
 				}
 			case EUnop("!", _, e):
 				return !evalPreproCond(e);
 			case EParent(e):
 				return evalPreproCond(e);
-			case EBinop("&&", e1, e2):
-				return evalPreproCond(e1) && evalPreproCond(e2);
-			case EBinop("||", e1, e2):
-				return evalPreproCond(e1) || evalPreproCond(e2);
+			case EBinop(op, e1, e2):
+				switch (op)
+				{
+					case "&&":
+						return evalPreproCond(e1) && evalPreproCond(e2);
+					case "||":
+						return evalPreproCond(e1) || evalPreproCond(e2);
+					case "==":
+						return getValFromExpr(e1) == getValFromExpr(e2);
+					case "!=":
+						return getValFromExpr(e1) != getValFromExpr(e2);
+					case ">=":
+						return getValFromExpr(e1, true) >= getValFromExpr(e2, true);
+					case ">":
+						return getValFromExpr(e1, true) > getValFromExpr(e2, true);
+					case "<=":
+						return getValFromExpr(e1, true) >= getValFromExpr(e2, true);
+					case "<":
+						return getValFromExpr(e1, true) > getValFromExpr(e2, true);
+					default:
+						error(EInvalidPreprocessor('Uncorrected operator \'$op\''), readPos, readPos);
+						return false;
+				}
+				/*
+				var define = preprocesorValues.get(e1);
+				var expr2 = expr(e2);
+				return define != null && define == switch (expr2){case EIdent(id): id default: evalPreproCond(expr2)};
+				*/
 			default:
-				error(EInvalidPreprocessor("Can't eval " + expr(e).getName()), readPos, readPos);
-			return false;
+				error(EInvalidPreprocessor("Can't eval " + edef.getName()), readPos, readPos);
+				return false;
 		}
 	}
 
@@ -2201,10 +2259,18 @@ class Parser {
 		var obj = preprocStack[spos];
 		var pos = readPos;
 		while( true ) {
-			var tk = token();
-			// TODO: Fix ending in with #end in the file
+			var tk:Token = token();
 			if( tk == TEof )
-				error(EInvalidPreprocessor("Unclosed"), pos, pos);
+			{
+				if (preprocStack.length != 0)
+				{
+					error(EInvalidPreprocessor("Unclosed"), pos, pos);
+				}
+				else
+				{
+					break;
+				}
+			}
 
 			if( preprocStack[spos] != obj ) {
 				push(tk);
