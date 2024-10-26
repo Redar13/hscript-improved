@@ -2004,14 +2004,10 @@ class Parser {
 		while( true ) {
 			var tk = token();
 			
-			if( tk == TEof )
-			{
-				if (preprocStack.length != 0)
-				{
+			if( tk == TEof ) {
+				if (preprocStack.length != 0) {
 					error(EInvalidPreprocessor("Unclosed"), pos, pos);
-				}
-				else
-				{
+				} else {
 					break;
 				}
 			}
