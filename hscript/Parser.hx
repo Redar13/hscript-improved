@@ -2258,8 +2258,9 @@ class Parser {
 		var spos = preprocStack.length - 1;
 		var obj = preprocStack[spos];
 		var pos = readPos;
+		var tk:Token;
 		while( true ) {
-			var tk:Token = token();
+			tk = token();
 			if( tk == TEof )
 			{
 				if (preprocStack.length != 0)
