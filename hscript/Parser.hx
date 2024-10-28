@@ -716,7 +716,7 @@ class Parser {
 				}
 				else
 				{
-					if (char == "i".code || char == "g".code || char == "s".code || char == "u".code || char == "m".code)
+					if (char == "i".code || char == "g".code || char == "s".code || char == "u".code || char == "m".code) // all valid ereg flags
 					{
 						flags += String.fromCharCode(char);
 					}
@@ -728,8 +728,7 @@ class Parser {
 				}
 			}
 		}
-		// trace(Printer.toString(e));
-		trace(expresion, flags);
+		// trace(expresion, flags);
 		return mk(ENew("EReg", [mk(EConst(CString(expresion))), mk(EConst(CString(flags)))]));
 	}
 
