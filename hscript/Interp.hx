@@ -496,8 +496,7 @@ class Interp {
 							}
 						 */
 						else if (_scriptObjectType == SBehaviourClass) {
-							var obj = cast(scriptObject, IHScriptCustomBehaviour);
-							return obj.hset(id, v);
+							return cast(scriptObject, IHScriptCustomBehaviour).hset(id, v);
 						}
 
 						if (instanceHasField) {
@@ -581,8 +580,7 @@ class Interp {
 							}
 						 */
 						else if (_scriptObjectType == SBehaviourClass) {
-							var obj = cast(scriptObject, IHScriptCustomBehaviour);
-							return obj.hset(id, v);
+							return cast(scriptObject, IHScriptCustomBehaviour).hset(id, v);
 						}
 
 						if (instanceHasField) {
@@ -1085,7 +1083,6 @@ class Interp {
 						error(EInvalidOp(op));
 				}
 			case ECall(e, params):
-				var args = [for (p in params) expr(p)];
 				switch (Tools.expr(e)) {
 					case EField(e, f, s):
 						var obj = expr(e);
@@ -1093,6 +1090,7 @@ class Interp {
 							var maybeFunc = usingFunctions.get(f);
 							if (maybeFunc != null)
 							{
+								var args = [for (p in params) expr(p)];
 								args.insert(0, null);
 								return call(null, maybeFunc, args);
 							}
@@ -1100,9 +1098,25 @@ class Interp {
 								return null;
 							error(EInvalidAccess(f));
 						}
-						return fcall(obj, f, args);
+						/*
+						if (f == "bind" && UnsafeReflect.isFunction(obj))
+						{
+							var tempNum = "_";
+							var finalParams;
+							return expr(EFunction([
+								for (p in params)
+								{
+									name
+								}
+							], ECall(), null));
+						}
+						else
+							*/
+						{
+							return fcall(obj, f, [for (p in params) expr(p)]);
+						}
 					default:
-						return call(null, expr(e), args);
+						return call(null, expr(e), [for (p in params) expr(p)]);
 				}
 			case EIf(econd, e1, e2):
 				return if (expr(econd) == true) expr(e1) else if (e2 == null) null else expr(e2);
@@ -1516,30 +1530,18 @@ class Interp {
 	function get(o:Dynamic, f:String):Dynamic {
 		if (o == null)
 			error(EInvalidAccess(f));
-		var cls = Type.getClass(o);
+		var cls;
 		if (useRedirects && {
-			var cl:Null<String> = getClassType(o, cls);
+			var cl:Null<String> = getClassType(o, cls = Type.getClass(o));
 			cl != null && (_getRedirect = getRedirects.get(cl)) != null;
 		}) {
 			return _getRedirect(o, f);
 		}
 		var v = null;
-		if (Std.isOfType(o, PolymodScriptClass)) {
-			// trace(f);
-			// var proxy:PolymodAbstractScriptClass = cast(o, PolymodScriptClass);
-			// if (proxy._interp.variables.exists(f))
-			// {
-			// 	return proxy._interp.variables.get(f);
-			// }
-			// else if (proxy.superClass != null && proxy.superHasField(f))
-			// {
-			// 	return Reflect.getProperty(proxy.superClass, f);
-			// }
-			// else
-			// {
+		if (Std.isOfType(o, IHScriptCustomBehaviour))
+			return cast(o, IHScriptCustomBehaviour).hget(f);
+		if (Std.isOfType(o, PolymodScriptClass))
 			return cast(o, PolymodAbstractScriptClass).get(f);
-			// }
-		}
 		if (Std.isOfType(o, HScriptedClass)) {
 			var proxy:PolymodAbstractScriptClass = UnsafeReflect.field(o, "_asc");
 			if (proxy != null)
@@ -1557,9 +1559,13 @@ class Interp {
 		// 	}
 		// }
 		if (isBypassAccessor && (v = Reflect.field(o, f)) == null) {
+			if (cls == null)
+				cls = Type.getClass(o);
 			v = Reflect.field(cls, f);
 		}
 		if (v == null && (v = Reflect.getProperty(o, f)) == null) {
+			if (cls == null)
+				cls = Type.getClass(o);
 			v = Reflect.getProperty(cls, f);
 		}
 
@@ -1575,23 +1581,8 @@ class Interp {
 			cl != null && (_setRedirect = setRedirects.get(cl)) != null;
 		})
 			return _setRedirect(o, f, v);
-		// if (o is HScriptedClass)
-		// {
-		// 	var proxy:PolymodScriptClass = Reflect.field(o, "_asc");
-		// 	if (proxy._interp.variables.exists(f))
-		// 	{
-		// 		proxy._interp.variables.set(f, v);
-		// 	}
-		// 	else if (proxy.superClass != null && UnsafeReflect.hasField(proxy.superClass, f))
-		// 	{
-		// 		UnsafeReflect.setProperty(proxy.superClass, f, v);
-		// 	}
-		// 	else if (proxy.superClass != null && UnsafeReflect.hasField(_proxy.superClass, f))
-		// 	{
-		// 		UnsafeReflect.setProperty(proxy.superClass, f, v);
-		// 	}
-		// 	return v;
-		// }
+		if (Std.isOfType(o, IHScriptCustomBehaviour))
+			return cast(o, IHScriptCustomBehaviour).hset(f, v);
 		if (Std.isOfType(o, PolymodScriptClass)) {
 			/*
 				var proxy:PolymodScriptClass = cast(o, PolymodScriptClass);
@@ -1734,7 +1725,8 @@ class Interp {
 			// }
 
 			default:
-				return Type.createInstance(resolve(cl), args);
+				var c:Dynamic = resolve(cl);
+				return (c is IHScriptCustomConstructor) ? cast(c, IHScriptCustomConstructor).hnew(args) : Type.createInstance(c, args);
 		}
 	}
 
