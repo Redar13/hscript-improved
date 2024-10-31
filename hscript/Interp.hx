@@ -33,7 +33,6 @@ import haxe.Constraints.IMap;
 import haxe.EnumTools;
 import haxe.PosInfos;
 import haxe.display.Protocol.InitializeResult;
-import haxe.ds.StringMap;
 import haxe.iterators.StringKeyValueIteratorUnicode;
 import hscript.Expr;
 import hscript.HScriptedClass;
@@ -200,15 +199,15 @@ class Interp {
 	public var errorHandler:Error->Void;
 	public var importFailedCallback:Array<String>->Bool;
 	public var onMetadata:String->Array<Expr>->Expr->Dynamic;
-	public var customClasses:StringMap<Dynamic>;
-	public var variables:StringMap<Dynamic>;
-	public var usingFunctions:StringMap<Function>;
-	public var publicVariables:StringMap<Dynamic>;
-	public var staticVariables:StringMap<Dynamic>;
+	public var customClasses:Map<String, Dynamic>;
+	public var variables:Map<String, Dynamic>;
+	public var usingFunctions:Map<String, Function>;
+	public var publicVariables:Map<String, Dynamic>;
+	public var staticVariables:Map<String, Dynamic>;
 
-	public var locals:StringMap<DeclaredVar>;
+	public var locals:Map<String, DeclaredVar>;
 
-	var binops:StringMap<Expr->Expr->Dynamic>;
+	var binops:Map<String, Expr->Expr->Dynamic>;
 
 	var depth:Int = 0;
 	var inTry:Bool;
@@ -237,7 +236,7 @@ class Interp {
 	var _proxy:PolymodAbstractScriptClass = null;
 
 	public function new(?targetObj:Dynamic) {
-		locals = new StringMap();
+		locals = new Map();
 		declared = new Array();
 		resetVariables();
 		initOps();
@@ -246,11 +245,11 @@ class Interp {
 	}
 
 	private function resetVariables() {
-		usingFunctions = new StringMap<Function>();
-		customClasses = new StringMap<Dynamic>();
-		variables = new StringMap<Dynamic>();
-		publicVariables = new StringMap<Dynamic>();
-		staticVariables = new StringMap<Dynamic>();
+		usingFunctions = new Map<String, Function>();
+		customClasses = new Map<String, Dynamic>();
+		variables = new Map<String, Dynamic>();
+		publicVariables = new Map<String, Dynamic>();
+		staticVariables = new Map<String, Dynamic>();
 
 		variables.set("null", null);
 		variables.set("true", true);
@@ -274,7 +273,7 @@ class Interp {
 
 	function initOps() {
 		var me = this;
-		binops = new StringMap();
+		binops = new Map();
 		binops.set("+", function(e1, e2) return me.expr(e1) + me.expr(e2));
 		binops.set("-", function(e1, e2) return me.expr(e1) - me.expr(e2));
 		binops.set("*", function(e1, e2) return me.expr(e1) * me.expr(e2));
@@ -696,7 +695,7 @@ class Interp {
 
 	public function execute(expr:Expr):Dynamic {
 		depth = 0;
-		locals = new StringMap();
+		locals = new Map();
 		declared = new Array();
 		return exprReturn(expr);
 	}
@@ -732,8 +731,8 @@ class Interp {
 		return null;
 	}
 
-	public function duplicate<T>(h:StringMap<T>) {
-		var h2 = new StringMap<T>();
+	public function duplicate<T>(h:Map<String, T>) {
+		var h2 = new Map<String, T>();
 		for (k in h.keys())
 			h2.set(k, h.get(k));
 		return h2;
@@ -1418,7 +1417,7 @@ class Interp {
 		_scriptClassDescriptors.set(name, c);
 	}
 
-	private var _scriptClassDescriptors:StringMap<ClassDeclEx> = new StringMap<ClassDeclEx>();
+	private var _scriptClassDescriptors:Map<String, ClassDeclEx> = new Map<String, ClassDeclEx>();
 
 	function whileLoop(econd, e) {
 		var old = declared.length;
@@ -1506,8 +1505,8 @@ class Interp {
 		cast(map, IMap<Dynamic, Dynamic>).set(key, value);
 	}
 
-	public static var getRedirects:StringMap<(Dynamic, String) -> Dynamic> = new StringMap();
-	public static var setRedirects:StringMap<(Dynamic, String, Dynamic) -> Dynamic> = new StringMap();
+	public static var getRedirects:Map<String, (Dynamic, String) -> Dynamic> = new Map();
+	public static var setRedirects:Map<String, (Dynamic, String, Dynamic) -> Dynamic> = new Map();
 
 	private static var _getRedirect:Dynamic->String->Dynamic;
 	private static var _setRedirect:Dynamic->String->Dynamic->Dynamic;

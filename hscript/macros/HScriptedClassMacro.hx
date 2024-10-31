@@ -317,11 +317,10 @@ class HScriptedClassMacro
 		var tClass = Context.toComplexType(tType);
 
 		// Start with a custom implementation of .toString()
-		var func_toString:Array<Field> = buildScriptedClass_toString(targetClass);
+		var func_toString:Field = buildScriptedClass_toString(targetClass);
 		if (func_toString != null)
 		{
-			for (i in func_toString)
-				fieldArray.push(i);
+			fieldArray.push(func_toString);
 		}
 		fieldDone.push('toString');
 
@@ -360,6 +359,7 @@ class HScriptedClassMacro
 					var paramType = targetParams[paramIndex];
 					var paramName = targetClass.params[paramIndex].name;
 					var paramFullName = '${targetClass.pack.join('.')}.${targetClass.name}.${paramName}';
+					// trace(paramFullName, paramType);
 					mappedParams.set(paramFullName, paramType);
 				}
 			}
@@ -372,7 +372,7 @@ class HScriptedClassMacro
 		return fieldArray;
 	}
 
-	static function buildScriptedClass_toString(cls:ClassType):Array<Field>
+	static function buildScriptedClass_toString(cls:ClassType):Field
 	{
 		var oldToString = cls.fields.get().find(i -> return i.name == "toString");
 		var _tempSuperCl = cls;
@@ -387,33 +387,7 @@ class HScriptedClassMacro
 		if (oldToString != null)
 			access.push(AOverride);
 
-		var funcs = [{
-			name: '__hsx_super_to_string_', // huh, "__hsx_super_toString" is like a duplicate field
-			doc: null,
-			access: [APrivate],
-			meta: null,
-			pos: cls.pos,
-			kind: FFun({
-				args: [],
-				params: null,
-				ret: Context.toComplexType(Context.getType('String')),
-				expr: macro
-				{
-					$
-					{
-						if (oldToString == null)
-						(
-							macro return $v{cls.name}
-						)
-						else
-						(
-							macro return super.toString()
-						)
-					}
-				},
-			}),
-		},
-		{
+		return {
 			name: 'toString',
 			doc: null,
 			access: access,
@@ -421,13 +395,22 @@ class HScriptedClassMacro
 			pos: cls.pos,
 			kind: FFun({
 				args: [],
-				params: null,
 				ret: Context.toComplexType(Context.getType('String')),
 				expr: macro
 				{
-					if (_asc == null)
+					if (_asc == null || _asc._nextFromSuper)
 					{
-						return this.__hsx_super_to_string_();
+						$
+						{
+							if (oldToString == null)
+							(
+								macro return $v{cls.name}
+							)
+							else
+							(
+								macro return super.toString()
+							)
+						}
 					}
 					else
 					{
@@ -435,9 +418,7 @@ class HScriptedClassMacro
 					}
 				},
 			}),
-		}];
-
-		return funcs;
+		};
 	}
 
 	static function buildScriptedClassFieldOverrides_inner(cls:ClassType, targetParams:Map<String, Type>):Map<String, Dynamic>
@@ -453,17 +434,14 @@ class HScriptedClassMacro
 			}
 			else
 			{
-				var results:Array<Field> = overrideField(field, targetParams);
-				if (results == null || results.length == 0)
+				var resultField:Field = overrideField(field, targetParams);
+				if (resultField == null)
 				{
 					fields.set(field.name, false);
 				}
 				else
 				{
-					for (result in results)
-					{
-						fields.set(result.name, result);
-					}
+					fields.set(resultField.name, resultField);
 				}
 			}
 		}
@@ -715,7 +693,7 @@ class HScriptedClassMacro
 	 * Given a ClassField from the target class, create one or more Fields that override the target field,
 	 * redirecting any calls to the internal AbstractScriptedClass.
 	 */
-	static function overrideField(field:ClassField, targetParams:Map<String, Type>, ?type:Type = null):Array<Field>
+	static function overrideField(field:ClassField, targetParams:Map<String, Type>, ?type:Type = null):Field
 	{
 		if (type == null)
 		{
@@ -746,18 +724,6 @@ class HScriptedClassMacro
 					return null;
 
 				/*
-				// We need to skip overriding functions which are inline.
-				// Normal Haxe classes can't override these functions anyway, so we can skip them.
-				switch (field.kind)
-				{
-					case FMethod(k):
-						switch (k)
-						{
-							case MethNormal: // Do nothing.
-							default: return null;
-						}
-				*/
-				/*
 				case FMethod(k):
 					switch (k)
 					{
@@ -774,8 +740,21 @@ class HScriptedClassMacro
 					}
 				*/
 				/*
-					default:
-						return null;
+				var targetParams = targetParams;
+				if (field.params.length > 0)
+				{
+					targetParams = [for (i => j in targetParams) i => j]; // make clone
+					for (i in field.params)
+					{
+						targetParams.set(i.name, deparameterizeType(switch(i.t)
+						{
+							case TInst(t, params):
+								Context.getType(t.get().module);
+							case t:
+								t;
+						}, targetParams));
+					}
+					trace(field.name + ": " + targetParams);
 				}
 				*/
 
@@ -844,7 +823,7 @@ class HScriptedClassMacro
 							var isOptional = (arg.value == null);
 
 							var val:Expr = arg.value == null ? null : Context.getTypedExpr(arg.value);
-							var type:Null<ComplexType> = Context.toComplexType(arg.v.t);
+							// var type:Null<ComplexType> = Context.toComplexType(arg.v.t);
 
 							func_inputArgs.push({
 								name: arg.v.name,
@@ -877,7 +856,6 @@ class HScriptedClassMacro
 					defaultType: Context.toComplexType(param.defaultType == null ? deparameterizeType(param.t, targetParams) : deparameterizeType(param.defaultType, targetParams))
 				}];
 				*/
-				var func_callArgs:Array<Expr> = [for (arg in func_inputArgs) macro $i{arg.name}];
 				// trace(func_inputArgs);
 
 				// if (field.params.length > 0)
@@ -887,10 +865,13 @@ class HScriptedClassMacro
 				// }
 				// Context.info('  Processing return of function "${field.name}"', Context.currentPos());
 				// var func_ret = doesReturnVoid ? null : Context.toComplexType(deparameterizeType(ret, targetParams));
+				var func_callArgs:Array<Expr> = [for (arg in func_inputArgs) macro $i{arg.name}];
 				//  var func_ret = doesReturnVoid ? null : Context.toComplexType(Context.follow(ret));
 
+				// if (func_ret != null)
+				// 	trace(func_ret);
 				var funcName:String = field.name;
-				var func_over:Field = {
+				return {
 					name: funcName,
 					doc: field.doc == null ? 'Polymod HScriptedClass override of ${funcName}.' : 'Polymod HScriptedClass override of ${funcName}.\n${field.doc}',
 					access: func_access,
@@ -900,9 +881,10 @@ class HScriptedClassMacro
 						args: func_inputArgs,
 						// params: func_params,
 						// ret: func_ret,
+						// params: [for (param in field.params) {name: param.name}],
 						expr: macro
 						{
-							if (_asc == null)
+							if (_asc == null || _asc._nextFromSuper)
 							{
 								// Fallback, call the original function.
 								$
@@ -929,34 +911,6 @@ class HScriptedClassMacro
 						},
 					}),
 				};
-				var func_superCall:Field = {
-					name: "__hsx_super_" + funcName,
-					doc: 'Calls the original ${field.name} function while ignoring the ScriptedClass override.',
-					access: [APrivate],
-					meta: field.meta.get(),
-					pos: field.pos,
-					kind: FFun({
-						args: func_inputArgs,
-						// params: func_params,
-						// ret: func_ret,
-						expr: macro
-						{
-							// var fieldName:String = $v{funcName};
-							// Fallback, call the original function.
-							// trace('ASC: Force call to super ${fieldName}');
-							$
-							{
-								doesReturnVoid ? (
-									macro super.$funcName($a{func_callArgs})
-								) : (
-									macro return super.$funcName($a{func_callArgs})
-								)
-							}
-						},
-					}),
-				}
-
-				return [func_over, func_superCall];
 			case TInst(_t, _params):
 				// This field is an instance of a class.
 				// Example: var test:TestClass = new TestClass();

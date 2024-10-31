@@ -159,9 +159,11 @@ class PolymodScriptClass
 		// trace(Type.typeof(superClass));
 		UnsafeReflect.setField(superClass, "_asc", this);
 		_interp.scriptObject = superClass;
+		_nextFromSuper = false;
 		return superClass;
 	}
 
+	@:allow(hscript.HScriptedClass)
 	var _nextFromSuper:Bool = false;
 	public function callFunction(fnName:String, ?args:Array<Dynamic>):Dynamic
 	{
@@ -176,14 +178,15 @@ class PolymodScriptClass
 			// 		if (Std.isOfType(a, PolymodScriptClass))
 			// 			args[i] = cast(a, PolymodScriptClass).superClass;
 			// 	}
-			fnName = (fnName == "toString" ? "__hsx_super_to_string_" : "__hsx_super_" + fnName);
+			_nextFromSuper = true;
 			func = UnsafeReflect.field(superClass, fnName);
 		}
+		var res = func == null ? null : _interp.call(superClass, func, args);
 		_nextFromSuper = false;
 		// trace("call " + fnName);
 		// trace(func != null);
 		// return func == null ? null : _interp.callThis(func, args);
-		return func == null ? null : _interp.call(superClass, func, args);
+		return res;
 		/*
 		var field = findField(fnName);
 		var r:Dynamic = null;
