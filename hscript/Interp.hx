@@ -1724,7 +1724,19 @@ class Interp {
 			// }
 
 			default:
-				var c:Dynamic = resolve(cl);
+				var c:Dynamic = resolve(cl, false, false);
+				if (c == null)
+				{
+					#if !macro
+					if (ClassTools.typedefDefines.exists(cl))
+						cl = ClassTools.typedefDefines.get(cl);
+					#end
+					c = Type.resolveClass(cl);
+					if (c != null)
+						variables.set(cl, c);
+				}
+				if (c == null)
+					error(EUnknownVariable(cl));
 				return (c is IHScriptCustomConstructor) ? cast(c, IHScriptCustomConstructor).hnew(args) : Type.createInstance(c, args);
 		}
 	}

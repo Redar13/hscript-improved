@@ -506,7 +506,6 @@ class Parser {
 			var backslash = false, dollar = false;
 			var parts:Array<Dynamic> = [];
 			var currentPart:Int = 0;
-			var hasOnlyString:Bool = true;
 
 			var old = line;
 
@@ -591,7 +590,6 @@ class Parser {
 						switch (token())
 						{
 							case TBrOpen:
-								hasOnlyString = false;
 								currentPart = parts.push(parseExpr());
 								ensure(TBrClose);
 							case TId(s):
@@ -623,10 +621,6 @@ class Parser {
 			{
 				return mk(EConst(CString('')));
 			}
-			if (parts.length == 1)
-			{
-				return mk(EConst(CString(parts[0])));
-			}
 
 			var e:Expr = null;
 			var currentPart:Int = 0;
@@ -652,7 +646,7 @@ class Parser {
 					e = makeBinop('+', e, part);
 			}
 			// trace(Printer.toString(e));
-			return e == null ? mk(EConst(CString(''))) : e;
+			return e;
 		}
 
 	function parseEreg():Expr
