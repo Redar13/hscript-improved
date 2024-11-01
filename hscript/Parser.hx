@@ -1053,11 +1053,10 @@ class Parser {
 							switch( t ) {
 								case TId(id):
 									path.push(id);
-								case TOp(id):
+								case TOp("*"):
 									if (star)
 										unexpected(t);
-									if (id == "*")
-										star = true;
+									star = true;
 								default:
 									unexpected(t);
 							}
@@ -1096,7 +1095,6 @@ class Parser {
 						case TId(id):
 							var path = [id];
 							var t = null;
-							var star:Bool = false;
 							while( true ) {
 								t = token();
 								if( t != TDot ) {
