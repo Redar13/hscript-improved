@@ -276,16 +276,16 @@ class Parser {
 		if( e == null ) return false;
 		return switch( expr(e) ) {
 			case EBlock(_), EObject(_), ESwitch(_): true;
-			case EFunction(_,e,_,_,_,_): isBlock(e);
-			case EClass(_,e,_,_): true;
-			case EVar(_, t, e, _,_): e != null ? isBlock(e) : t != null ? t.match(CTAnon(_)) : false;
+			case EFunction(_,e): isBlock(e);
+			case EClass(_,e): true;
+			case EVar(_, t, e): e != null ? isBlock(e) : t != null ? t.match(CTAnon(_)) : false;
 			case EIf(_,e1,e2): if( e2 != null ) isBlock(e2) else isBlock(e1);
 			case EBinop(_,_,e): isBlock(e);
 			case EUnop(_,prefix,e): !prefix && isBlock(e);
 			case EWhile(_,e): isBlock(e);
 			case EDoWhile(_,e): isBlock(e);
 			case EFor(_,_,e): isBlock(e);
-			case EReturn(e): e != null && isBlock(e);
+			case EReturn(e): isBlock(e);
 			case ETry(_, _, _, e): isBlock(e);
 			case EMeta(_, _, e): isBlock(e);
 			default: false;
@@ -934,6 +934,13 @@ class Parser {
 					}
 				}
 				var ident = getIdent();
+				var get = null, set = null;
+				if( maybe(TPOpen) ) {
+					get = getIdent();
+					ensure(TComma);
+					set = getIdent();
+					ensure(TPClose);
+				}
 				var tk = token();
 				var t = null;
 				nextType = null;
@@ -949,7 +956,7 @@ class Parser {
 				else
 					push(tk);
 				nextType = null;
-				mk(EVar(ident, t, e, nextIsPublic, nextIsStatic, nextIsPrivate, id == "final", nextIsInline), p1, (e == null) ? tokenMax : pmax(e));
+				mk(EVar(ident, t, e, new EFieldAccess(nextIsPublic, nextIsInline, false, nextIsStatic, id == "final")), p1, (e == null) ? tokenMax : pmax(e));
 			case "while":
 				var econd = parseExpr();
 				var e = parseExpr();
@@ -1001,9 +1008,7 @@ class Parser {
 				mk(EFunction(
 						inf.args, inf.body,
 						name, inf.ret,
-						nextIsPublic, nextIsStatic,
-						nextIsOverride, nextIsPrivate,
-						nextIsFinal, nextIsInline
+						new EFieldAccess(nextIsPublic, nextIsInline, nextIsOverride, nextIsStatic, nextIsFinal)
 					), p1, pmax(inf.body));
 			case "import":
 				var oldReadPos = readPos;

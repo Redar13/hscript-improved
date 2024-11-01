@@ -66,7 +66,7 @@ class Tools {
 	public static function map( e : Expr, f : Expr -> Expr ) {
 		var edef = switch( expr(e) ) {
 			case EConst(_), EIdent(_), EBreak, EContinue: expr(e);
-			case EVar(n, t, e, isPublic, isStatic, isPrivate): EVar(n, t, if( e != null ) f(e) else null, isPublic, isStatic, isPrivate);
+			case EVar(n, t, e, access): EVar(n, t, if( e != null ) f(e) else null, access);
 			case EParent(e): EParent(f(e));
 			case EBlock(el): EBlock([for( e in el ) f(e)]);
 			case EField(e, fi): EField(f(e),fi);
@@ -77,7 +77,7 @@ class Tools {
 			case EWhile(c, e): EWhile(f(c),f(e));
 			case EDoWhile(c, e): EDoWhile(f(c),f(e));
 			case EFor(v, it, e): EFor(v, f(it), f(e));
-			case EFunction(args, e, name, t, isPublic, isStatic, isOverride, isPrivate): EFunction(args, f(e), name, t, isPublic, isStatic, isOverride, isPrivate);
+			case EFunction(args, e, name, t, access): EFunction(args, f(e), name, t, access);
 			case EReturn(e): EReturn(if( e != null ) f(e) else null);
 			case EArray(e, i): EArray(f(e),f(i));
 			case EArrayDecl(el): EArrayDecl([for( e in el ) f(e)]);

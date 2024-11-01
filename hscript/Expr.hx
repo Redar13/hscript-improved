@@ -53,7 +53,7 @@ enum Expr {
 #end
 	EConst( c : Const ); // Const int, flaot and string
 	EIdent( v : String ); // get variable
-	EVar( n : String, ?t : CType, ?e : Expr, ?isPublic : Bool, ?isStatic : Bool, ?isPrivate : Bool, ?isFinal : Bool, ?isInline : Bool ); // init var (var a:Float = 5;)
+	EVar( n : String, ?t : CType, ?e : Expr, ?access : EFieldAccess, ?isFinal : Bool ); // var a;
 	EParent( e : Expr ); // ( expr )
 	EBlock( e : Array<Expr> ); // { expr }
 	EField( e : Expr, f : String , ?safe : Bool ); // var.field
@@ -65,7 +65,7 @@ enum Expr {
 	EFor( v : String, it : Expr, e : Expr, ?ithv: String); // for (i in 0...8) { expr }
 	EBreak; // break
 	EContinue; // continue
-	EFunction( args : Array<Argument>, e : Expr, ?name : String, ?ret : CType, ?isPublic : Bool, ?isStatic : Bool, ?isOverride : Bool, ?isPrivate : Bool, ?isFinal : Bool, ?isInline : Bool ); // init function (function(argA, argB:Float) { expr } or (argA, argB:Float) -> { expr })
+	EFunction( args : Array<Argument>, e : Expr, ?name : String, ?ret : CType, ?access : EFieldAccess); // function(argA, argB:Float) { expr } or (argA, argB:Float) -> { expr }
 	EReturn( ?e : Expr ); // function() { return 0; }
 	EArray( e : Expr, index : Expr ); // myArray[0]
 	EArrayDecl( e : Array<Expr>, ?wantedType: CType ); // [1, 2, 3, 4, 5]
@@ -82,7 +82,7 @@ enum Expr {
 	EImport( c : String, ?asname:String ); // import flixel.FlxSprite as Sprite;
 	EImportStar( c : String ); // import flixel.*;
 	EUsing( c : String ); // using StringTools;
-	EClass( name:String, fields:Array<Expr>, ?extend:String, interfaces:Array<String>, ?isFinal:Bool, ?isPrivate:Bool ); // Class MyClass { expr }
+	EClass( name:String, fields:Array<Expr>, ?extend:String, ?interfaces:Array<String>, ?isFinal:Bool, ?isPrivate:Bool ); // Class MyClass { expr }
 }
 
 @:structInit
@@ -94,6 +94,137 @@ final class SwitchCase {
 typedef Argument = { name : String, ?t : CType, ?opt : Bool, ?value : Expr };
 
 typedef Metadata = Array<{ name : String, params : Array<Expr> }>;
+
+enum abstract EFieldAccess(UInt16) from UInt16 to UInt16 {
+	public function new(?isPublic:Bool, ?isInline:Bool, ?isOverride:Bool, ?isStatic:Bool, ?isFinal:Bool, ?isMacro:Bool) {
+		this = isPublic ? 1 : 0;
+		if (isInline) {
+			this += 0x10;
+		}
+		if (isOverride) {
+			this += 0x100;
+		} else if (isStatic) {
+			this += 0x200;
+		} else if (isMacro) {
+			this += 0x300;
+		}
+		if (isFinal) {
+			this += 0x1000;
+		}
+	}
+
+	public var isPrivate(get, set):Bool;
+	public var isPublic(get, set):Bool;
+	public var isInline(get, set):Bool;
+	public var isOverride(get, set):Bool;
+	public var isStatic(get, set):Bool;
+	public var isMacro(get, set):Bool;
+	public var isFinal(get, set):Bool;
+
+	inline function get_isPrivate():Bool {
+		return this & 0x0001 == 0;
+	}
+
+	inline function set_isPrivate(e):Bool {
+		if (e)
+			this |= 0x0000;
+		else
+			this &= 0xFFF1;
+		return e;
+	}
+
+	inline function get_isPublic():Bool {
+		return this & 0x0001 == 1;
+	}
+
+	inline function set_isPublic(e):Bool {
+		if (e)
+			this |= 0x0001;
+		else
+			this &= 0xFFF0;
+		return e;
+	}
+
+	inline function get_isInline():Bool {
+		return this & 0x0010 == 0x0010;
+	}
+
+	inline function set_isInline(e):Bool {
+		if (e)
+			this |= 0x0010;
+		else
+			this &= 0xFF0F;
+		return e;
+	}
+
+	inline function get_isOverride():Bool {
+		return this & 0x0300 == 0x0100;
+	}
+
+	inline function set_isOverride(e):Bool {
+		specialHexCode(e, isStatic, isMacro);
+		return e;
+	}
+
+	inline function get_isStatic():Bool {
+		return this & 0x0300 == 0x0200 || isMacro; // you can't have a macro without static
+	}
+
+	inline function set_isStatic(e):Bool {
+		specialHexCode(isOverride, e, isMacro);
+		return e;
+	}
+
+	inline function get_isMacro():Bool {
+		return this & 0x0300 == 0x0300;
+	}
+
+	inline function set_isMacro(e):Bool {
+		specialHexCode(isOverride, isStatic, e);
+		return e;
+	}
+
+	inline function get_isFinal():Bool {
+		return this & 0x1000 == 0x1000;
+	}
+
+	inline function set_isFinal(e):Bool {
+		if (e)
+			this |= 0x1000;
+		else
+			this &= 0x0FFF;
+		return e;
+	}
+
+	extern inline function specialHexCode(needOverride:Bool, needStatic:Bool, needMacro:Bool) {
+		this &= 0xF0FF;
+		if (needOverride)
+			this |= 0x0100;
+		else if (needStatic)
+			this |= 0x0200;
+		else if (needMacro)
+			this |= 0x0300;
+	}
+
+	public function toString():String {
+		var res = "";
+		if (isFinal)
+			res += " final";
+		if (isPublic)
+			res += " public";
+		// else
+		// 	res += " private";
+		if (isOverride)
+			res += " override";
+		else if (isStatic)
+			res += " static";
+		if (isMacro)
+			res += " macro";
+		if (isInline)
+			res += " inline";
+		return res.length > 0 ? res.substr(1) : res;
+	}
+}
 
 enum CType {
 	CTPath( path : Array<String>, ?params : Array<CType> );

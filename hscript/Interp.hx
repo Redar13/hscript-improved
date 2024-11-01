@@ -1027,7 +1027,7 @@ class Interp {
 				if (l != null)
 					return l.r;
 				return resolve(id);
-			case EVar(n, type, e, isPublic, isStatic):
+			case EVar(n, type, e, access):
 				var initExpr:Dynamic = null;
 				if (e != null) {
 					initExpr = castExprByType(expr(e), type);
@@ -1035,14 +1035,14 @@ class Interp {
 				declared.push({n: n, old: locals.get(n), depth: depth});
 				locals.set(n, {r: initExpr, depth: depth});
 				if (depth == 0) {
-					if (isStatic == true && allowStaticVariables) {
+					if (access.isStatic && allowStaticVariables) {
 						n = getStaticVariableName(n);
 						if (!staticVariables.exists(n)) {
 							staticVariables.set(n, initExpr);
 						}
 						return null;
 					}
-					(isPublic && allowPublicVariables ? publicVariables : variables).set(n, initExpr);
+					(access.isPublic && allowPublicVariables ? publicVariables : variables).set(n, initExpr);
 				}
 				return null;
 			case EBlock(exprs):
@@ -1101,16 +1101,16 @@ class Interp {
 						if (f == "bind" && UnsafeReflect.isFunction(obj))
 						{
 							var tempNum = "_";
-							var finalParams;
-							return expr(EFunction([
-								for (p in params)
-								{
-									name
-								}
-							], ECall(), null));
+							var inputArgs:Array<Argument> = [];
+							var backendArgs:Array<Argument> = [];
+							for (p in params)
+							{
+
+							}
+							return expr(EFunction(inputArgs, ECall(obj, backendArgs), null));
 						}
 						else
-							*/
+						*/
 						{
 							return fcall(obj, f, [for (p in params) expr(p)]);
 						}
@@ -1135,7 +1135,7 @@ class Interp {
 			case EReturn(e):
 				returnValue = e == null ? null : expr(e);
 				throw SReturn;
-			case EFunction(params, fexpr, name, type, isPublic, isStatic, isOverride):
+			case EFunction(params, fexpr, name, type, access):
 				var capturedLocals:Map<String, DeclaredVar> = [for (k => e in locals)
 					if (e != null && e.depth > 0)
 						k => e
@@ -1151,6 +1151,8 @@ class Interp {
 						minParams++;
 					}
 				}
+
+				// ?TODO: Buffer of functions
 				var f = UnsafeReflect.makeVarArgs(function(args:Array<Dynamic>) {
 					if (me.locals == null || me.variables == null)
 						return null;
@@ -1210,13 +1212,13 @@ class Interp {
 				if (name != null) {
 					if (depth == 0) {
 						// global function
-						if (isStatic && allowStaticVariables)
+						if (access.isStatic && allowStaticVariables)
 						{
 							staticVariables.set(getStaticVariableName(name), f);
 						}
 						else
 						{
-							((isPublic && allowPublicVariables) ? publicVariables : variables).set(name, f);
+							((access.isPublic && allowPublicVariables) ? publicVariables : variables).set(name, f);
 						}
 					} else {
 						// function-in-function is a local function
