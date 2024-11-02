@@ -745,6 +745,18 @@ class Interp {
 		}
 	}
 
+	inline function mk(e:ExprDef, ?origin:Null<String>, ?pmin:Null<Int>, ?pmax:Null<Int>, ?line:Null<Int> ):Expr {
+		#if hscriptPos
+		if (origin == null) origin = curExpr.origin;
+		if (pmin == null) pmin = curExpr.pmin;
+		if (pmax == null) pmax = curExpr.pmax;
+		if (line == null) line = curExpr.line;
+		return { e : e, pmin : pmin, pmax : pmax, origin : origin, line : line };
+		#else
+		return e;
+		#end
+	}
+
 	public inline function error(e:#if hscriptPos ErrorDef #else Error #end, rethrow = false):Dynamic {
 		#if hscriptPos var e = new Error(e, curExpr.pmin, curExpr.pmax, curExpr.origin, curExpr.line); #end
 
@@ -941,13 +953,7 @@ class Interp {
 							importList.remove(i); // remove duplicate
 					// trace(importList);
 					for (i in importList)
-						expr(#if hscriptPos {
-							e: EImport(i),
-							pmin: curExpr.pmin,
-							pmax: curExpr.pmax,
-							origin: curExpr.origin,
-							line: curExpr.line,
-						} #else EImport(i) #end);
+						expr(mk(EImport(i)));
 				}
 				#end
 				return null;
@@ -1097,20 +1103,27 @@ class Interp {
 								return null;
 							error(EInvalidAccess(f));
 						}
-						/*
 						if (f == "bind" && UnsafeReflect.isFunction(obj))
 						{
-							var tempNum = "_";
 							var inputArgs:Array<Argument> = [];
-							var backendArgs:Array<Argument> = [];
+							var backendArgs:Array<Expr> = [];
+							var i:Int = 0;
 							for (p in params)
 							{
-
+								if (Tools.expr(p).match(EIdent("_")))
+								{
+									i++;
+									inputArgs.push({name: '___arg$i'});
+									backendArgs.push(mk(EIdent('___arg$i')));
+								}
+								else
+								{
+									backendArgs.push(p);
+								}
 							}
-							return expr(EFunction(inputArgs, ECall(obj, backendArgs), null));
+							return expr(mk(EFunction(inputArgs, mk(ECall(e, backendArgs)))));
 						}
 						else
-						*/
 						{
 							return fcall(obj, f, [for (p in params) expr(p)]);
 						}
@@ -1639,13 +1652,13 @@ class Interp {
 			return UnsafeReflect.field(o, "_asc").callFunction(f, args);
 		}
 
-		var func:Function = get(o, f);
-
-		if (func == null && (func = usingFunctions.get(f)) != null) // todo?: ignore @:noUsing
+		var func:Function = usingFunctions.get(f); // todo?: ignore @:noUsing
+		if (func != null)
 		{
 			args.insert(0, o);
 			return call(o, func, args);
 		}
+		func = get(o, f);
 		// #if html
 		// Workaround for an HTML5-specific issue.
 		// https://github.com/HaxeFoundation/haxe/issues/11298
