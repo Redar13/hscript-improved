@@ -157,7 +157,6 @@ class Interp {
 		if (parentInterp != null) {
 			errorHandler = null;
 			importFailedCallback = null;
-			usingFunctions = null;
 			onMetadata = null;
 			// staticVariables = null;
 			allowStaticVariables = allowPublicVariables = allowTypes = false;
@@ -180,7 +179,6 @@ class Interp {
 			allowStaticVariables = parentInterp.allowStaticVariables;
 			allowPublicVariables = parentInterp.allowPublicVariables;
 			allowTypes = parentInterp.allowTypes;
-			usingFunctions = parentInterp.usingFunctions;
 			usingEnabled = parentInterp.usingEnabled;
 			#if hscriptPos
 			var me = this;
