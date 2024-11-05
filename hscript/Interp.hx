@@ -959,22 +959,23 @@ class Interp {
 			case EImport(c, n):
 				if (!importEnabled)
 					return null;
-				var splitClassName = [for (e in c.split(".")) e.trim()];
-				var realClassName = splitClassName.join(".");
+				var splitClassName:Array<String> = [for (e in c.split(".")) e];
+				var realClassName:String = c;
 				#if !macro
 				if (ClassTools.typedefDefines.exists(realClassName))
 					realClassName = ClassTools.typedefDefines.get(realClassName);
 				#end
-				var claVarName = splitClassName[splitClassName.length - 1];
-				var toSetName = n != null ? n : claVarName;
-				var oldClassName = realClassName;
-				var oldSplitName = splitClassName.copy();
+				var claVarName:String = splitClassName[splitClassName.length - 1];
+				var toSetName:String = n != null ? n : claVarName;
 
 				if (variables.exists(toSetName)) // class is already imported
 					return null;
-
 				if (importBlocklist.contains(realClassName))
 					return null;
+
+				var oldClassName:String = null;
+				var oldSplitName:Array<String> = null;
+
 				var cl = Type.resolveClass(realClassName);
 				if (cl == null)
 					cl = Type.resolveClass('${realClassName}_HSC');
@@ -985,6 +986,8 @@ class Interp {
 
 				// Allow for flixel.ui.FlxBar.FlxBarFillDirection;
 				if (cl == null && en == null) {
+					oldClassName = realClassName;
+					oldSplitName = splitClassName.copy();
 					if (splitClassName.length > 1) {
 						splitClassName.splice(-2, 1); // Remove the last last item
 						realClassName = splitClassName.join(".");

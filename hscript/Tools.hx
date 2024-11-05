@@ -23,7 +23,6 @@ package hscript;
 import hscript.Expr;
 
 class Tools {
-
 	public static function iter( e : Expr, f : Expr -> Void ) {
 		switch( expr(e) ) {
 			case EConst(_), EIdent(_):
@@ -59,7 +58,6 @@ class Tools {
 				if( def != null ) f(def);
 			case EMeta(name, args, e): if( args != null ) for( a in args ) f(a); f(e);
 			case ECheckType(e,_): f(e);
-
 		}
 	}
 
