@@ -149,8 +149,13 @@ class Printer {
 				}
 			case EIdent(v):
 				add(v);
-			case EVar(n, t, e): // TODO: static, public, override
-				add("var " + n);
+			case EVar(n, t, e, a):
+				var aStr = Std.string(a);
+				add(aStr);
+				if (aStr.length > 0)
+					add(" ");
+				add(a.isFinal ? "final " : "var ");
+				add(n);
 				addType(t);
 				if( e != null ) {
 					add(" = ");
@@ -184,15 +189,15 @@ class Printer {
 				add((s == true ? "?." : ".") + f);
 			case EBinop(op, e1, e2):
 				expr(e1);
-				add(" " + op + " ");
+				add(" " + Printer.getBinaryOp(op) + " ");
 				expr(e2);
 			case EUnop(op, pre, e):
 				if( pre ) {
-					add(op);
+					add(Printer.getUnaryOp(op));
 					expr(e);
 				} else {
 					expr(e);
-					add(op);
+					add(Printer.getUnaryOp(op));
 				}
 			case ECall(e, args):
 				if( e == null )
@@ -244,7 +249,11 @@ class Printer {
 				add("break");
 			case EContinue:
 				add("continue");
-			case EFunction(params, e, name, ret): // TODO: static, public, override
+			case EFunction(params, e, name, ret, a):
+				var aStr = Std.string(a);
+				add(aStr);
+				if (aStr.length > 0)
+					add(" ");
 				add("function");
 				if( name != null )
 					add(" " + name);
@@ -313,9 +322,9 @@ class Printer {
 						expr(f.e);
 						add(",\n");
 					}
-					add("}");
 					tabs = tabs.substring(1);
 					add(tabs);
+					add("}");
 				}
 			case ETernary(c,e1,e2):
 				expr(c);
@@ -337,20 +346,21 @@ class Printer {
 						expr(v);
 					}
 					add(": ");
-					tabs += "\t";
+					// tabs += "\t";
 					expr(c.expr);
 					add(";\n");
-					tabs = tabs.substring(1);
+					// tabs = tabs.substring(1);
 				}
 				if( def != null ) {
 					add(tabs);
 					add("default: ");
-					tabs += "\t";
+					// tabs += "\t";
 					expr(def);
-					tabs = tabs.substring(1);
+					// tabs = tabs.substring(1);
 					add(";\n");
 				}
 				tabs = tabs.substring(1);
+				add(tabs);
 				add("}");
 			case EMeta(name, args, e):
 				add("@");
@@ -375,31 +385,87 @@ class Printer {
 		}
 	}
 
-	public static function toString( e : Expr ) {
+	public static inline function toString( e : Expr ) {
 		return new Printer().exprToString(e);
 	}
 
-	public static function errorToString( e : Expr.Error ) {
-		var message = switch( #if hscriptPos e.e #else e #end ) {
-			case EInvalidChar(c): "Invalid character: '"+(StringTools.isEof(c) ? "EOF (End Of File)" : String.fromCharCode(c))+"' ("+c+")";
-			case EUnexpected(s): "Unexpected token: \""+s+"\"";
+	public static function getBinaryOp(op:Binop) {
+		return switch(op) {
+			case OpAdd: "+";
+			case OpSub: "-";
+			case OpMult: "*";
+			case OpDiv: "/";
+			case OpMod: "%";
+			case OpAnd: "&";
+			case OpOr: "|";
+			case OpXor: "^";
+			case OpShl: "<<";
+			case OpShr: ">>";
+			case OpUShr: ">>>";
+			case OpEq: "==";
+			case OpNotEq: "!=";
+			case OpGt: ">";
+			case OpGte: ">=";
+			case OpLt: "<";
+			case OpLte: "<=";
+			case OpBoolAnd: "&&";
+			case OpBoolOr: "||";
+			case OpIs: "is";
+			case OpNullCoal: "??";
+			case OpAssign: "=";
+			case OpArrow: "=>";
+			case OpInterval: "...";
+			case OpAssignOp(op): getBinaryOp(op) + "=";
+		}
+	}
+
+	public static function getUnaryOp(op:Unop) {
+		return switch(op) {
+			case OpIncrement: "++";
+			case OpDecrement: "--";
+			case OpNot: "!";
+			case OpNeg: "-";
+			case OpNegBits: "~";
+			case OpSpread: "...";
+		}
+	}
+
+	public static function errorToStringMessage( e : Expr.Error ) {
+		return switch( Tools.cleanError(e) ) {
+			case EInvalidChar(c): "Invalid character: '" + (StringTools.isEof(c) ? "EOF (End Of File)" : String.fromCharCode(c)) + "' (" + c + ")";
+			case EUnexpected(s): "Unexpected token: \"" + s + "\"";
 			case EUnterminatedString: "Unterminated string";
 			case EUnterminatedComment: "Unterminated comment";
+			case EUnterminatedRegex: "Unterminated regular expression";
 			case EInvalidPreprocessor(str): "Invalid preprocessor (" + str + ")";
-			case EUnknownVariable(v): "Unknown variable: "+v;
-			case EInvalidIterator(v): "Invalid iterator: "+v;
-			case EInvalidOp(op): "Invalid operator: "+op;
+			case EUnknownVariable(v): "Unknown variable: " + v;
+			case EInvalidIterator(v): "Invalid iterator: " + v;
+			case EInvalidType(t): "Invalid type: " + t;
+			case EInvalidOp(op): "Invalid operator: " + op;
+			case EInvalidAccess(f, on) if (on != null): "Invalid access to field " + f + " on " + on;
 			case EInvalidAccess(f): "Invalid access to field " + f;
 			case ECustom(msg): msg;
+			case EPreset(msg): msg.toString();
 			case EInvalidClass(cla): "Invalid class: " + cla + " was not found.";
-			case EAlreadyExistingClass(cla): 'Custom Class named $cla already exists.';
-		};
+			case EAlreadyExistingClass(cla): "Custom Class named " + cla + " already exists.";
+			case EInvalidEscape(s): "Invalid escape sequence: " + s;
+		}
+	}
+
+	public static function errorToString( e : Expr.Error ) {
 		#if hscriptPos
-		return e.origin + ":" + e.line + ": " + message;
+		return e.origin + ":" + e.line + ": " + errorToStringMessage(e);
 		#else
-		return message;
+		return errorToStringMessage(e);
 		#end
 	}
 
+	public static inline function convertTypeToString( t : CType ) {
+		return new Printer().typeToString(t);
+	}
+
+	public static inline function convertExprToString( e : Expr ) {
+		return toString(e);
+	}
 
 }

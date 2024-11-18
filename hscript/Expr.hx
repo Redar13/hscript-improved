@@ -51,14 +51,14 @@ enum ExprDef {
 typedef ExprDef = Expr;
 enum Expr {
 #end
-	EConst( c : Const ); // Const int, flaot and string
-	EIdent( v : String ); // get variable
-	EVar( n : String, ?t : CType, ?e : Expr, ?access : EFieldAccess, ?isFinal : Bool ); // var a;
+	EConst( c : Const ); // Const int, float and string
+	EIdent( v : String ); // variable referense
+	EVar( n : String, ?t : CType, ?e : Expr, ?access : EFieldAccess); // var a;
 	EParent( e : Expr ); // ( expr )
 	EBlock( e : Array<Expr> ); // { expr }
 	EField( e : Expr, f : String , ?safe : Bool ); // var.field
-	EBinop( op : String, e1 : Expr, e2 : Expr ); // var == 0, var >= 5
-	EUnop( op : String, prefix : Bool, e : Expr ); // !var, var++
+	EBinop( op : Binop, e1 : Expr, e2 : Expr ); // var == 0, var >= 5
+	EUnop( op : Unop, prefix : Bool, e : Expr ); // !var, var++
 	ECall( e : Expr, params : Array<Expr> ); // myFunction(5, 6)
 	EIf( cond : Expr, e1 : Expr, ?e2 : Expr ); // if (var == 5){ expr } else { expr }
 	EWhile( cond : Expr, e : Expr ); // while (var == 5) { expr }
@@ -77,12 +77,171 @@ enum Expr {
 	ESwitch( e : Expr, cases : Array<SwitchCase>, ?defaultExpr : Expr ); // switch(e) { case 5: expr default: expr}
 	EDoWhile( cond : Expr, e : Expr); // do { expr } while (var == 5)
 	EMeta( name : String, args : Array<Expr>, e : Expr ); // @:access(flixel.FlxG)
-	ECheckType( e : Expr, t : CType ); // (dynamic : FlxSprite)
+	ECheckType( e : Expr, t : CType ); // (dynamicVar : FlxSprite)
 
 	EImport( c : String, ?asname:String ); // import flixel.FlxSprite as Sprite;
 	EImportStar( c : String ); // import flixel.*;
 	EUsing( c : String ); // using StringTools;
 	EClass( name:String, fields:Array<Expr>, ?extend:String, ?interfaces:Array<String>, ?isFinal:Bool, ?isPrivate:Bool ); // Class MyClass { expr }
+}
+
+enum Binop {
+	/**
+		`+`
+	**/
+	OpAdd;
+
+	/**
+		`*`
+	**/
+	OpMult;
+
+	/**
+		`/`
+	**/
+	OpDiv;
+
+	/**
+		`-`
+	**/
+	OpSub;
+
+	/**
+		`=`
+	**/
+	OpAssign;
+
+	/**
+		`==`
+	**/
+	OpEq;
+
+	/**
+		`!=`
+	**/
+	OpNotEq;
+
+	/**
+		`>`
+	**/
+	OpGt;
+
+	/**
+		`>=`
+	**/
+	OpGte;
+
+	/**
+		`<`
+	**/
+	OpLt;
+
+	/**
+		`<=`
+	**/
+	OpLte;
+
+	/**
+		`&`
+	**/
+	OpAnd;
+
+	/**
+		`|`
+	**/
+	OpOr;
+
+	/**
+		`^`
+	**/
+	OpXor;
+
+	/**
+		`&&`
+	**/
+	OpBoolAnd;
+
+	/**
+		`||`
+	**/
+	OpBoolOr;
+
+	/**
+		`<<`
+	**/
+	OpShl;
+
+	/**
+		`>>`
+	**/
+	OpShr;
+
+	/**
+		`>>>`
+	**/
+	OpUShr;
+
+	/**
+		`%`
+	**/
+	OpMod;
+
+	/**
+		`+=` `-=` `/=` `*=` `<<=` `>>=` `>>>=` `|=` `&=` `^=` `%=`
+	**/
+	OpAssignOp(op:Binop);
+
+	/**
+		`...`
+	**/
+	OpInterval;
+
+	/**
+		`=>`
+	**/
+	OpArrow;
+
+	/**
+		`is`
+	**/
+	OpIs; // used to be OpIn, but our system treats that differently
+
+	/**
+		`??`
+	**/
+	OpNullCoal;
+}
+
+enum abstract Unop(UInt8) {
+	/**
+		`++`
+	**/
+	var OpIncrement;
+
+	/**
+		`--`
+	**/
+	var OpDecrement;
+
+	/**
+		`!`
+	**/
+	var OpNot;
+
+	/**
+		`-`
+	**/
+	var OpNeg;
+
+	/**
+		`~`
+	**/
+	var OpNegBits;
+
+	/**
+		`...`
+	**/
+	var OpSpread;
 }
 
 @:structInit
@@ -91,7 +250,23 @@ final class SwitchCase {
 	public var expr : Expr;
 }
 
-typedef Argument = { name : String, ?t : CType, ?opt : Bool, ?value : Expr };
+// typedef Argument = { name : String, ?t : CType, ?opt : Bool, ?value : Expr };
+class Argument {
+	public var name : String;
+	public var t : Null<CType>;
+	public var opt : Bool;
+	public var value : Null<Expr>;
+	public function new(name:String, ?t:Null<CType>, ?opt:Bool, ?value:Expr) {
+		this.name = name;
+		this.t = t;
+		this.opt = opt;
+		this.value = value;
+	}
+
+	public function toString() {
+		return (opt ? "?" : "") + name + (t != null ? ":" + Printer.convertTypeToString(t) : "") + (value != null ? "=" + Printer.convertExprToString(value) : "");
+	}
+}
 
 typedef Metadata = Array<{ name : String, params : Array<Expr> }>;
 
@@ -206,23 +381,27 @@ enum abstract EFieldAccess(UInt16) from UInt16 to UInt16 {
 			this |= 0x0300;
 	}
 
-	public function toString():String {
+	public static function toStringExtr(acc:EFieldAccess, ?allowFinal:Bool):String {
 		var res = "";
-		if (isFinal)
+		if (allowFinal && acc.isFinal)
 			res += " final";
-		if (isPublic)
+		if (acc.isPublic)
 			res += " public";
 		// else
 		// 	res += " private";
-		if (isOverride)
+		if (acc.isOverride)
 			res += " override";
-		else if (isStatic)
+		else if (acc.isStatic)
 			res += " static";
-		if (isMacro)
+		if (acc.isMacro)
 			res += " macro";
-		if (isInline)
+		if (acc.isInline)
 			res += " inline";
 		return res.length > 0 ? res.substr(1) : res;
+	}
+
+	public function toString():String {
+		return inline toStringExtr(this);
 	}
 }
 
@@ -235,8 +414,10 @@ enum CType {
 	CTNamed( n : String, t : CType );
 }
 
+typedef Error = Error_;
+
 #if hscriptPos
-class Error {
+class Error_ {
 	public var e : ErrorDef;
 	public var pmin : Int;
 	public var pmax : Int;
@@ -255,22 +436,45 @@ class Error {
 }
 enum ErrorDef {
 #else
-enum Error {
+enum Error_ {
 #end
 	EInvalidChar( c : Int );
 	EUnexpected( s : String );
 	EUnterminatedString;
 	EUnterminatedComment;
+	EUnterminatedRegex;
 	EInvalidPreprocessor( msg : String );
 	EUnknownVariable( v : String );
 	EInvalidIterator( v : String );
+	EInvalidType( t : String );
 	EInvalidOp( op : String );
-	EInvalidAccess( f : String );
+	EInvalidAccess( f : String, ?on : String );
 	ECustom( msg : String );
+	EPreset( msg : ErrorMessage );
 	EInvalidClass( className : String);
 	EAlreadyExistingClass( className : String);
+	EInvalidEscape( s : String );
 }
 
+enum abstract ErrorMessage(Expr.UInt8) from Expr.UInt8 to Expr.UInt8 {
+    final INVALID_CHAR_CODE_MULTI;
+    final FROM_CHAR_CODE_NON_INT;
+    final EMPTY_INTERPOLATION;
+    final UNKNOWN_MAP_TYPE;
+    final UNKNOWN_MAP_TYPE_RUNTIME;
+    final EXPECT_KEY_VALUE_SYNTAX;
+
+    public function toString():String {
+        return switch(cast this) {
+            case INVALID_CHAR_CODE_MULTI: "'char'.code only works on single characters";
+            case FROM_CHAR_CODE_NON_INT: "String.fromCharCode only works on integers";
+            case EMPTY_INTERPOLATION: "Invalid interpolation: Expression cannot be empty";
+            case UNKNOWN_MAP_TYPE: "Unknown Map Type";
+            case UNKNOWN_MAP_TYPE_RUNTIME: "Unknown Map Type, while parsing at runtime";
+            case EXPECT_KEY_VALUE_SYNTAX: "Expected a => b";
+        }
+    }
+}
 
 enum ModuleDecl {
 	DPackage( path : Array<String> );

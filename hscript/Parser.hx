@@ -20,11 +20,28 @@
  * DEALINGS IN THE SOFTWARE.
  */
 package hscript;
+
 import hscript.Expr;
+
+#if hscriptPos
+//typedef StoredToken = { min : Int, max : Int, t : Token }
+@:structInit
+class StoredToken {
+	public var min : Int;
+	public var max : Int;
+	public var t : Token;
+}
+#else
+typedef StoredToken = Token;
+#end
+
+typedef TokenList = List<StoredToken>;
 
 enum Token {
 	TEof;
 	TConst( c : Const );
+	TInterpString( tkl: Array<TokenList> ); // Stores the tokens that make up the interpolation string
+	TRegex( r: String, opt: String );
 	TId( s : String );
 	TOp( s : String );
 	TPOpen;
@@ -41,8 +58,6 @@ enum Token {
 	TDoubleDot;
 	TMeta( s : String );
 	TPrepro( s : String );
-	TApostr;
-	TEreg;
 }
 
 class Parser {
@@ -51,6 +66,7 @@ class Parser {
 	public var line : Int;
 	public var opChars : String;
 	public var identChars : String;
+	public var startIdentChars : String;
 	public var opPriority : Map<String,Int>;
 	public var opRightAssoc : Map<String,Bool>;
 
@@ -95,6 +111,7 @@ class Parser {
 	var char : Int;
 	var ops : Array<Bool>;
 	var idents : Array<Bool>;
+	var startIdents : Array<Bool>;
 	var uid : Int = 0;
 
 	var disableOrOp : Bool = false;
@@ -105,20 +122,20 @@ class Parser {
 	var tokenMax : Int;
 	var oldTokenMin : Int;
 	var oldTokenMax : Int;
-	var tokens : List<{ min : Int, max : Int, t : Token }>;
 	#else
 	static inline var p1 = 0;
 	static inline var tokenMin = 0;
 	static inline var tokenMax = 0;
-	var tokens : haxe.ds.GenericStack<Token>;
-
 	#end
+
+	var tokens : TokenList;
 
 	public function new() {
 		line = 1;
 		convertPreProcValsToStr = true;
 		opChars = "+*/-=!><&|^%~";
 		identChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_";
+		startIdentChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_";
 		var priorities:Array<Array<String>> = [
 			["%"],
 			["*", "/"],
@@ -165,18 +182,19 @@ class Parser {
 		readPos = 0;
 		tokenMin = oldTokenMin = 0;
 		tokenMax = oldTokenMax = 0;
-		tokens = new List();
-		#else
-		tokens = new haxe.ds.GenericStack<Token>();
 		#end
+		tokens = new TokenList();
 		char = -1;
 		ops = new Array();
 		idents = new Array();
+		startIdents = new Array();
 		uid = 0;
 		for( i in 0...opChars.length )
 			ops[opChars.charCodeAt(i)] = true;
 		for( i in 0...identChars.length )
 			idents[identChars.charCodeAt(i)] = true;
+		for( i in 0...startIdentChars.length )
+			startIdents[startIdentChars.charCodeAt(i)] = true;
 	}
 
 	public function parseString( s : String, ?origin : String = "hscript" ) : Expr {
@@ -199,9 +217,22 @@ class Parser {
 		return null;
 	}
 
+
+	inline function realToken(tk:Token, ?min:Int, ?max:Int):StoredToken {
+		#if hscriptPos
+		return {
+			t : tk,
+			min : min != null ? min : tokenMin,
+			max : max != null ? max : tokenMax
+		};
+		#else
+		return tk;
+		#end
+	}
+
 	inline function push( tk:Token ):Void {
 		#if hscriptPos
-		tokens.push( { t : tk, min : tokenMin, max : tokenMax } );
+		tokens.push( realToken(tk) );
 		tokenMin = oldTokenMin;
 		tokenMax = oldTokenMax;
 		#else
@@ -347,6 +378,34 @@ class Parser {
 		return parseExprNext(mk(EObject(fl),p1));
 	}
 
+	function parseExprFromTokens(t:TokenList) {
+		var oldPos = readPos;
+		#if hscriptPos
+		var oldTokenMin = tokenMin;
+		var oldTokenMax = tokenMax;
+		#end
+		var oldTokens = tokens;
+
+		tokens = t;
+		// unsure about these
+		#if hscriptPos
+		tokenMin = 0;
+		tokenMax = t.length - 1;
+		#end
+		readPos = 0;
+		//trace(t.map(getTk).map(tokenString));
+
+		var e = parseExpr();
+
+		tokens = oldTokens;
+		#if hscriptPos
+		tokenMin = oldTokenMin;
+		tokenMax = oldTokenMax;
+		#end
+		readPos = oldPos;
+		return e;
+	}
+
 	function parseExpr() {
 		var oldPos = readPos;
 		var tk = token();
@@ -361,6 +420,60 @@ class Parser {
 				return parseExprNext(e);
 			case TConst(c):
 				return parseExprNext(mk(EConst(c)));
+			case TInterpString(tg):
+				if(tg.length == 0)
+					return parseExprNext(mk(EConst(CString(""))));
+
+				var e = null;
+				var tg = [for(t in tg) if(t.length > 0) t]; // Copy the array and remove empty objects
+
+				var needsCasting = !getTk(tg[0].first()).match(TConst(CString(_)));
+				if(needsCasting) {
+					tg.unshift(getTokenList(TConst(CString("")))); // add a dummy string to force casting
+				}
+				function addToMultiString(er:Expr) {
+					if(e == null) {
+						e = er;
+						return;
+					}
+					// Make it so that the parenthesis are not optimized
+					switch(Tools.expr(er)) {
+						case EParent(e):
+							er = mk(EParent(e));
+							/*
+							switch(Tools.expr(e)) {
+								case EIdent(_) | EConst(_): // The parenthesis are not needed for constants
+									er = mk(EParent(e, false));
+								default:
+									er = mk(EParent(e, true));
+							}
+							*/
+						default:
+					}
+					e = mk(EBinop(OpAdd, e, er));
+					//e = mk(EParent(e));
+				}
+				while(tg.length > 0) {
+					var t = tg.shift();
+					if(t.length == 0)
+						continue;
+					if(t.length == 1) {
+						var tk = t.first();
+						switch(getTk(tk)) {
+							case TConst(c):
+								addToMultiString(mk(EConst(c)));
+							default:
+								addToMultiString(parseExprFromTokens(t));
+						}
+					} else {
+						addToMultiString(parseExprFromTokens(t));
+					}
+				}
+
+				return parseExprNext(e);
+			case TRegex(r, opt):
+				var e = mk(EParent(mk(ENew("EReg", [mk(EConst(CString(r))), mk(EConst(CString(opt)))]), p1)), p1);
+				return parseExprNext(e);
 			case TPOpen:
 				tk = token();
 				if( tk == TPClose ) {
@@ -385,14 +498,14 @@ class Parser {
 								return parseExprNext(mk(ECheckType(e,t),p1,tokenMax));
 							case TComma:
 								switch( expr(e) ) {
-									case EIdent(v): return parseLambda([{ name : v, t : t }], pmin(e));
+									case EIdent(v): return parseLambda([new Argument(v, t)], pmin(e));
 									default:
 								}
 							default:
 						}
 					case TComma:
 						switch( expr(e) ) {
-							case EIdent(v): return parseLambda([{name:v}], pmin(e));
+							case EIdent(v): return parseLambda([new Argument(v)], pmin(e));
 							default:
 						}
 					default:
@@ -491,165 +604,12 @@ class Parser {
 			case TMeta(id) if( allowMetadata ):
 				var args = parseMetaArgs();
 				return mk(EMeta(id, args, parseExpr()),p1);
-			case TEreg:
-				return parseExprNext(parseEreg());
-			case TApostr:
-				return parseExprNext(parseStringInterpolation());
 			default:
 				return unexpected(tk);
 		}
 	}
 
-	function parseStringInterpolation():Expr
-		{
-			var char:Int = 0;
-			var backslash = false, dollar = false;
-			var parts:Array<Dynamic> = [];
-			var currentPart:Int = 0;
-
-			var old = line;
-
-			#if hscriptPos
-			var p1 = tokenMin;
-			#end
-
-			while (true)
-			{
-				if (this.char < 0)
-					char = readChar();
-				else
-				{
-					char = this.char;
-					this.char = -1;
-				}
-
-				if (StringTools.isEof(char))
-				{
-					line = old;
-					error(EUnterminatedString, p1, p1);
-					break;
-				}
-
-				if (backslash)
-				{
-					backslash = false;
-					switch (char)
-					{
-						case 'n'.code:
-							this.char = '\n'.code;
-						case 'r'.code:
-							this.char = '\r'.code;
-						case 't'.code:
-							this.char = '\t'.code;
-						case "'".code, '"'.code, '\\'.code:
-							this.char = char;
-						case '/'.code:
-							if (allowJSON)
-								this.char = char;
-							else
-								invalidChar(char);
-						case "u".code:
-							if (!allowJSON)
-								invalidChar(char);
-							var k = 0;
-							for (i in 0...4)
-							{
-								k <<= 4;
-								var char = readChar();
-								switch (char)
-								{
-									case 48, 49, 50, 51, 52, 53, 54, 55, 56, 57: // 0-9
-										k += char - 48;
-									case 65, 66, 67, 68, 69, 70: // A-F
-										k += char - 55;
-									case 97, 98, 99, 100, 101, 102: // a-f
-										k += char - 87;
-									default:
-										if (StringTools.isEof(char))
-										{
-											line = old;
-											error(EUnterminatedString, p1, p1);
-										}
-										invalidChar(char);
-								}
-							}
-							this.char = k;
-						default:
-							invalidChar(char);
-					}
-				}
-				else if (char == '$'.code && !dollar)
-				{
-					var c = readChar();
-					this.char = c;
-					if (c == '$'.code)
-					{
-						dollar = true;
-					}
-					else
-						switch (token())
-						{
-							case TBrOpen:
-								currentPart = parts.push(parseExpr());
-								ensure(TBrClose);
-							case TId(s):
-								currentPart = parts.push(mk(EIdent(s)));
-							default:
-						}
-				}
-				else if (char == '\\'.code)
-				{
-					backslash = true;
-				}
-				else if (char == "'".code)
-				{
-					break;
-				}
-				else
-				{
-					if (parts[currentPart] == null)
-						parts[currentPart] = "";
-
-					if (char == '\n'.code)
-						line++;
-
-					parts[currentPart] += String.fromCharCode(char);
-				}
-			}
-			// trace(parts);
-			if (parts.length == 0)
-			{
-				return mk(EConst(CString('')));
-			}
-
-			var e:Expr = null;
-			var currentPart:Int = 0;
-			while (parts.length > currentPart)
-			{
-				var part:Dynamic = parts[currentPart++];
-				if (part is String)
-					part = mk(EConst(CString(cast part)));
-				else
-				{
-					switch (Tools.expr(part))
-					{
-						case EConst(c):
-							part = mk(EConst(c));
-						default:
-							part = mk(EParent(part));
-					}
-				}
-
-				if (e == null)
-					e = part;
-				else
-					e = makeBinop('+', e, part);
-			}
-			// trace(Printer.toString(e));
-			return e;
-		}
-
-	function parseEreg():Expr
+	function parseRegex():Expr
 	{
 		var char:Int = 0;
 		var expresion:String = "";
@@ -730,7 +690,7 @@ class Parser {
 		while( true ) {
 			var id = getIdent();
 			var t = maybe(TDoubleDot) ? parseType() : null;
-			args.push({ name : id, t : t });
+			args.push(new Argument(id, t));
 			var tk = token();
 			switch( tk ) {
 				case TComma:
@@ -791,30 +751,44 @@ class Parser {
 		return mk(edef, pmin(e), pmax(e));
 	}
 
-	function makeUnop( op:String, e:Null<Expr> ) {
+	function makeUnop( op:String, e:Expr ):Expr {
+		var op = Tools.getUnopEnum(op);
+		return _makeUnop(op, e);
+	}
+
+	function _makeUnop( op:Unop, e:Expr ):Expr {
 		if( e == null && resumeErrors )
 			return null;
-		return switch( expr(e) ) {
-			case EBinop(bop, e1, e2): mk(EBinop(bop, makeUnop(op, e1), e2), pmin(e1), pmax(e2));
-			case ETernary(e1, e2, e3): mk(ETernary(makeUnop(op, e1), e2, e3), pmin(e1), pmax(e3));
+		return switch( Tools.expr(e) ) {
+			case EBinop(bop, e1, e2): mk(EBinop(bop, _makeUnop(op, e1), e2), pmin(e1), pmax(e2));
+			case ETernary(e1, e2, e3): mk(ETernary(_makeUnop(op, e1), e2, e3), pmin(e1), pmax(e3));
 			default: mk(EUnop(op,true,e),pmin(e),pmax(e));
 		}
 	}
 
 	function makeBinop( op:String, e1:Expr, e:Expr ) {
+		// TODO: clean this up
+		if(!Tools.isValidBinOp(op))
+			error(EInvalidOp(op),pmin(e1),pmax(e1));
+		var op = Tools.getOpEnum(op);
+		return _makeBinop(op, e1, e);
+	}
+
+	function _makeBinop( op:Binop, e1:Expr, e:Expr ) {
+		// TODO: clean this up
 		if( e == null && resumeErrors )
 			return mk(EBinop(op,e1,e),pmin(e1),pmax(e1));
-		return switch( expr(e) ) {
+		return switch( Tools.expr(e) ) {
 			case EBinop(op2,e2,e3):
-				if( opPriority.get(op) <= opPriority.get(op2) && !opRightAssoc.exists(op) )
-					mk(EBinop(op2,makeBinop(op,e1,e2),e3),pmin(e1),pmax(e3));
+				if( opPriority.get(Printer.getBinaryOp(op)) <= opPriority.get(Printer.getBinaryOp(op2)) && !opRightAssoc.exists(Printer.getBinaryOp(op)) )
+					mk(EBinop(op2,_makeBinop(op,e1,e2),e3),pmin(e1),pmax(e3));
 				else
 					mk(EBinop(op, e1, e), pmin(e1), pmax(e));
 			case ETernary(e2,e3,e4):
-				if( opRightAssoc.exists(op) )
+				if( opRightAssoc.exists(Printer.getBinaryOp(op)) )
 					mk(EBinop(op,e1,e),pmin(e1),pmax(e));
 				else
-					mk(ETernary(makeBinop(op, e1, e2), e3, e4), pmin(e1), pmax(e));
+					mk(ETernary(_makeBinop(op, e1, e2), e3, e4), pmin(e1), pmax(e));
 			default:
 				mk(EBinop(op,e1,e),pmin(e1),pmax(e));
 		}
@@ -1353,13 +1327,13 @@ class Parser {
 			case TOp(op):
 				if( op == "->" ) {
 					// single arg reinterpretation of `f -> e` , `(f) -> e` and `(f:T) -> e`
-					switch( expr(e1) ) {
-						case EIdent(i), EParent(expr(_) => EIdent(i)):
+					switch( Tools.expr(e1) ) {
+						case EIdent(i), EParent(Tools.expr(_) => EIdent(i)):
 							var eret = parseExpr();
-							return mk(EFunction([{ name : i }], mk(EReturn(eret),pmin(eret))), pmin(e1));
-						case ECheckType(expr(_) => EIdent(i), t):
+							return mk(EFunction([new Argument(i)], mk(EReturn(eret),pmin(eret))), pmin(e1));
+						case ECheckType(Tools.expr(_) => EIdent(i), t):
 							var eret = parseExpr();
-							return mk(EFunction([{ name : i, t : t }], mk(EReturn(eret),pmin(eret))), pmin(e1));
+							return mk(EFunction([new Argument(i, t)], mk(EReturn(eret),pmin(eret))), pmin(e1));
 						default:
 					}
 					unexpected(tk);
@@ -1371,13 +1345,14 @@ class Parser {
 				}
 
 				if( opPriority.get(op) == -1 ) {
-					if( isBlock(e1) || switch(expr(e1)) { case EParent(_): true; default: false; } ) {
+					if( isBlock(e1) || switch(Tools.expr(e1)) { case EParent(_): true; default: false; } ) { // TODO: clean QQQ
 						push(tk);
 						return e1;
 					}
-					return parseExprNext(mk(EUnop(op,false,e1),pmin(e1)));
+					return parseExprNext(mk(EUnop(Tools.getUnopEnum(op),false,e1),pmin(e1)));
 				}
 				return makeBinop(op,e1,parseExpr());
+
 			case TDot | TQuestionDot:
 				var field = getIdent();
 				return parseExprNext(mk(EField(e1, field, tk == TQuestionDot), pmin(e1)));
@@ -1386,7 +1361,7 @@ class Parser {
 				// {
 					// case EField(e, "bind"):
 					// 	var paramsExpr = parseExprList(TPClose).map(i -> return i.matching(EIdent("_")) ? null : i);
-					// 	return mk(EFunction([for (i in paramsExpr){ name : i, t : t }], null, pmin(e1)));
+					// 	return mk(EFunction([for (i in paramsExpr) new Argument(i, t)], null, pmin(e1)));
 					// default:
 						return parseExprNext(mk(ECall(e1,parseExprList(TPClose)),pmin(e1)));
 				// }
@@ -1424,7 +1399,7 @@ class Parser {
 						unexpected(tk);
 						break;
 				}
-				var arg : Argument = { name : name };
+				var arg : Argument = new Argument(name);
 				args.push(arg);
 				if( opt ) arg.opt = true;
 				if( allowTypes ) {
@@ -1865,79 +1840,269 @@ class Parser {
 		return null;
 	}
 
+	function getTokenList(t:Token) {
+		var ls:TokenList = new TokenList();
+		ls.add(realToken(t));
+		return ls;
+	}
+
 	// ------------------------ lexing -------------------------------
 
 	inline function readChar():Int {
 		return StringTools.fastCodeAt(input, readPos++);
 	}
 
-	function readString( until:Int ):String {
+	inline function peekChar() {
+		return StringTools.fastCodeAt(input, readPos);
+	}
+
+	static function convertHex(c:Int) {
+		return switch( c ) {
+			case 48,49,50,51,52,53,54,55,56,57: c - 48; // 0-9
+			case 65,66,67,68,69,70: c - 55; // A-F
+			case 97,98,99,100,101,102: c - 87; // a-f
+			default: -1;
+		}
+	}
+
+	function readString( until:Int, isSingle:Bool = false ) {
 		var c = 0;
 		var b = new StringBuf();
 		var esc = false;
 		var old = line;
 		var s = input;
-		#if hscriptPos
-		var p1 = readPos - 1;
-		#end
+		var p1 = readPos - 1; // No #if check since we need it for the error message
+		var ce = ""; // current escape
+		var lc = 0; // last char
+		function readEscape() {
+			var c = lc = readChar();
+			if( StringTools.isEof(c) ) {
+				line = old;
+				error(EUnterminatedString, p1, p1);
+				return -1;
+			}
+			ce += String.fromCharCode(c);
+			return c;
+		}
+		var interpolation = false;
+		var interpBlock = false; // true == {} is required | false == no {}
+		var interpString:Array<TokenList> = null;
 		while( true ) {
+			if(interpolation) {
+				var arr:TokenList = getTokenList(TPOpen);
+
+				if(interpBlock) {
+					var depthStack:Array<Token> = [TBrClose];
+					while(true) {
+						var tk = token();
+						switch(tk) {
+							case TEof:
+								error(EUnterminatedString, p1, p1);
+								break;
+							case TBrOpen:
+								depthStack.push(TBrClose);
+							case TBkOpen:
+								depthStack.push(TBkClose);
+							case TPOpen:
+								depthStack.push(TPClose);
+							case TBrClose | TBkClose | TPClose:
+								if(depthStack[depthStack.length - 1] != tk) {
+									unexpected(tk);
+									break;
+								}
+								depthStack.pop();
+								if(depthStack.length == 0)
+									break;
+							default:
+						}
+						arr.add(realToken(tk));
+					}
+				} else {
+					var id = "";
+					while(true) {
+						var c = readChar();
+						if( !idents[c] ) {
+							readPos--;
+							break;
+						}
+						id += String.fromCharCode(c);
+					}
+					arr.add(realToken(TId(id)));
+				}
+
+				arr.add(realToken(TPClose));
+				interpString.push(arr);
+				interpolation = false;
+
+				if(arr.length == 2) // If its just ()
+					error(EPreset(EMPTY_INTERPOLATION), p1, p1);
+
+				if( StringTools.isEof(peekChar()) )
+					break;
+
+				continue;
+			}
+
 			var c = readChar();
 			if( StringTools.isEof(c) ) {
 				line = old;
 				error(EUnterminatedString, p1, p1);
 				break;
 			}
+
 			if( esc ) {
+				ce = "\\" + String.fromCharCode(c);
 				esc = false;
 				switch( c ) {
 					case 'n'.code: b.addChar('\n'.code);
 					case 'r'.code: b.addChar('\r'.code);
 					case 't'.code: b.addChar('\t'.code);
 					case "'".code, '"'.code, '\\'.code: b.addChar(c);
-					case '/'.code: if( allowJSON ) b.addChar(c) else invalidChar(c);
-					case "u".code:
+					//case '/'.code: // doesnt exist in real haxe
+					//	if( allowJSON )
+					//		b.addChar(c)
+					//	else
+					//		invalidChar(c);
+					case '0'.code | '1'.code | '2'.code | '3'.code | '4'.code | '5'.code | '6'.code | '7'.code: // Octal \000-\377
+						var n = c - '0'.code;
+						var i = 0;
+						for( i in 0...2 ) { // 2 since we already read the first digit
+							var char = readEscape();
+							if(char == -1) break;
+
+							n *= 8;
+							if( char >= '0'.code && char <= '7'.code ) {
+								n += char - '0'.code;
+							} else {
+								error(EInvalidEscape(ce), p1, p1);
+								break;
+							}
+						}
+						b.addChar(n);
+					case "x".code: // Hexadecimal \x00-\xFF
 						if( !allowJSON ) invalidChar(c);
 						var k = 0;
-						for( i in 0...4 ) {
+						for( i in 0...2 ) {
+							var char = readEscape();
+							if(char == -1) break;
+
 							k <<= 4;
-							var char = readChar();
-							switch( char ) {
-								case 48,49,50,51,52,53,54,55,56,57: // 0-9
-									k += char - 48;
-								case 65,66,67,68,69,70: // A-F
-									k += char - 55;
-								case 97,98,99,100,101,102: // a-f
-									k += char - 87;
-								default:
-									if( StringTools.isEof(char) ) {
-										line = old;
-										error(EUnterminatedString, p1, p1);
-									}
-									invalidChar(char);
+							var v = convertHex(char);
+							if( v == -1 ) {
+								error(EInvalidEscape(ce), p1, p1);
+							} else {
+								k += v;
 							}
 						}
 						b.addChar(k);
-					default: invalidChar(c);
+					case "u".code: // Unicode \u0000-\uFFFF | \u{0}-\u{10FFFF}
+						if( !allowJSON ) invalidChar(c);
+						// todo: rewrite this to use peekChar()
+						var nextChar = readChar();
+						if( StringTools.isEof(nextChar) ) {
+							line = old;
+							error(EUnterminatedString, p1, p1);
+							break;
+						}
+						if( nextChar == '{'.code ) { // unicode
+							ce += "{";
+							var k = 0;
+							var i = 0;
+							while( true ) {
+								var char = readEscape();
+								if(char == -1 || char == '}'.code) break;
+								if( i > 6 ) {
+									error(EInvalidEscape(ce), p1, p1);
+									break;
+								}
+
+								k <<= 4;
+								var v = convertHex(char);
+								if( v == -1 ) {
+									error(EInvalidEscape(ce), p1, p1);
+								} else {
+									k += v;
+								}
+								i++;
+							}
+							b.addChar(k);
+							continue;
+						} else {
+							readPos--;
+						}
+						var k = 0;
+						for( i in 0...4 ) {
+							var char = readEscape();
+							if(char == -1) break;
+
+							k <<= 4;
+							var v = convertHex(char);
+							if( v == -1 ) {
+								error(EInvalidEscape(ce), p1, p1);
+							} else {
+								k += v;
+							}
+						}
+						b.addChar(k);
+					default:
+						error(EInvalidEscape(ce), p1, p1);
 				}
-			} else if( c == 92 )
+			} else if( c == "\\".code ) {
 				esc = true;
-			else if( c == until )
+			}
+			else if( isSingle && c == "$".code) { // Check for $
+				var peek = peekChar();
+				if(peek != '$'.code) { // make sure it's not escaped
+					var valid = false;
+					if(interpBlock = (peek == '{'.code)) {
+						readPos++; // skip the {
+						valid = true;
+					} else if(startIdents[peek]) // $ident
+						valid = true;
+
+					if(valid) {
+						if(interpString == null)
+							interpString = [];
+						if(b.length > 0) // store the current string
+							interpString.push(getTokenList(TConst(CString(b.toString()))));
+						b = new StringBuf();
+						interpolation = true;
+					} else {
+						b.addChar(c);
+					}
+				} else {
+					readPos++; // skip the $ from the escaped $$
+					b.addChar(c);
+				}
+			}
+			else if( c == until ) // stops when it gets to the same quote character as when it started
 				break;
 			else {
-				if( c == 10 ) line++;
+				if( c == '\n'.code ) line++;
 				b.addChar(c);
 			}
 		}
-		return b.toString();
+		if(isSingle && interpString != null && interpString.length > 0) {
+			if(b.length > 0)
+				interpString.push(getTokenList(TConst(CString(b.toString())))); // Add the current string
+			return TInterpString(interpString);
+		}
+		return TConst( CString(b.toString()) );
 	}
 
-	function token():Token {
+	function peekToken():Token {
+		var t = token();
+		push(t);
+		return t;
+	}
 
-		#if hscriptPos
+	function token(/*?infos : Null<haxe.PosInfos>*/) {
 		//function ttrace(v:Dynamic, ?infos : Null<haxe.PosInfos>) {
 		//	Sys.print(infos.fileName+":"+infos.lineNumber+": " + Std.string(v));
 		//	Sys.print("\r\n");
 		//}
+
+		#if hscriptPos
 		var t = tokens.pop();
 		if( t != null ) {
 			tokenMin = t.min;
@@ -2097,11 +2262,8 @@ class Parser {
 				case "}".code: return TBrClose;
 				case "[".code: return TBkOpen;
 				case "]".code: return TBkClose;
-				case "~".code if ((char = readChar()) == "/".code): return TEreg;
-				case "'".code if (allowStringInterpolation):
-					return TApostr;
-				case '"'.code, "'".code:
-					return TConst( CString(readString(char)) );
+				case "'".code, '"'.code:
+					return readString(char, char == "'".code);
 				case "?".code:
 					char = readChar();
 					switch (char) {
@@ -2156,6 +2318,27 @@ class Parser {
 					}
 					invalidChar(char);
 				default:
+					if(char == '~'.code) {
+						var char = readChar();
+						if( char == "/".code ) {
+							var regex = getRegexBody();
+							var opt = "";
+							while( true ) {
+								char = readChar();
+								if( char != 'g'.code && char != 'i'.code && char != 'm'.code && char != 's'.code && char != 'u'.code ) {
+									if( char >= 'a'.code && char <= 'z'.code ) {
+										error(ECustom('Invalid regex expression option "' + String.fromCharCode(char) + '"'), readPos, readPos);
+									}
+									this.char = char;
+									return TRegex(regex, opt);
+								}
+								opt += String.fromCharCode(char);
+							}
+						}
+						readPos--;
+						//this.char = peekChar();
+					}
+
 					if( ops[char] ) {
 						var op = String.fromCharCode(char);
 						while( true ) {
@@ -2195,6 +2378,57 @@ class Parser {
 		return null;
 	}
 
+	function getRegexBody() {
+		var regex = new StringBuf();
+		var esc = false;
+		var start = readPos-2;
+		while( true ) {
+			var char = readChar();
+			if(StringTools.isEof(char))
+				error(EUnterminatedRegex, start, start);
+			if( char == "\n".code || char == "\r".code )
+				error(EUnterminatedRegex, start, readPos-1);
+
+			if( esc ) {
+				esc = false;
+				switch( char ) {
+					case '/'.code: regex.addChar("/".code);
+					case 'n'.code: regex.addChar("\n".code);
+					case 'r'.code: regex.addChar("\r".code);
+					case 't'.code: regex.addChar("\t".code);
+					case '\\'.code, '$'.code, '.'.code, '*'.code, '+'.code, '^'.code, '|'.code, '{'.code, '}'.code, '['.code, ']'.code, '('.code, ')'.code, '?'.code, '-'.code:
+						regex.addChar(char);
+					case '0'.code | '1'.code | '2'.code | '3'.code | '4'.code | '5'.code | '6'.code | '7'.code | '8'.code | '9'.code:
+						regex.addChar("\\".code);
+						regex.addChar(char);
+					case 'w'.code, 'W'.code, 'b'.code, 'B'.code, 's'.code, 'S'.code, 'd'.code, 'D'.code, 'x'.code:
+						regex.addChar("\\".code);
+						regex.addChar(char);
+					case 'u'.code, 'U'.code: // UNICODE
+						regex.addChar("\\".code);
+						for( i in 0...4 ) {
+							var c = readChar();
+							if( StringTools.isEof(c) )
+								error(EUnterminatedRegex, start, readPos-1);
+							var h = convertHex(c);
+							if( h == -1 )
+								invalidChar(c);
+							regex.addChar(c);
+						}
+
+					default: invalidChar(char);
+				}
+			} else if( char == "\\".code ) {
+				esc = true;
+				continue;
+			} else if( char == "/".code )
+				break;
+			else
+				regex.addChar(char);
+		}
+		return regex.toString();
+	}
+
 	function preprocValue( id : String ) : Dynamic {
 		return preprocesorValues.get(id);
 	}
@@ -2225,7 +2459,7 @@ class Parser {
 				}
 				mk(EIdent(id), tokenMin, tokenMax);
 			case TOp("!"):
-				mk(EUnop("!", true, parsePreproCond()), tokenMin, tokenMax);
+				mk(EUnop(OpNot, true, parsePreproCond()), tokenMin, tokenMax);
 			default:
 				unexpected(tk);
 		}
@@ -2269,28 +2503,28 @@ class Parser {
 						error(EInvalidPreprocessor("Can't eval " + edef.getName() + " with " + edef2.getName()), readPos, readPos);
 						return false;
 				}
-			case EUnop("!", _, e):
+			case EUnop(OpNot, _, e):
 				return !evalPreproCond(e);
 			case EParent(e):
 				return evalPreproCond(e);
 			case EBinop(op, e1, e2):
 				switch (op)
 				{
-					case "&&":
+					case OpBoolAnd:
 						return evalPreproCond(e1) && evalPreproCond(e2);
-					case "||":
+					case OpBoolOr:
 						return evalPreproCond(e1) || evalPreproCond(e2);
-					case "==":
+					case OpEq:
 						return getValFromExpr(e1) == getValFromExpr(e2);
-					case "!=":
+					case OpNotEq:
 						return getValFromExpr(e1) != getValFromExpr(e2);
-					case ">=":
+					case OpGte:
 						return getValFromExpr(e1, true) >= getValFromExpr(e2, true);
-					case ">":
+					case OpGt:
 						return getValFromExpr(e1, true) > getValFromExpr(e2, true);
-					case "<=":
+					case OpLte:
 						return getValFromExpr(e1, true) >= getValFromExpr(e2, true);
-					case "<":
+					case OpLt:
 						return getValFromExpr(e1, true) > getValFromExpr(e2, true);
 					default:
 						error(EInvalidPreprocessor('Uncorrected operator \'$op\''), readPos, readPos);
@@ -2338,6 +2572,14 @@ class Parser {
 			default:
 				return TPrepro(id);
 		}
+	}
+
+	inline function getTk(t:StoredToken) {
+		#if hscriptPos
+		return t.t;
+		#else
+		return t;
+		#end
 	}
 
 	function skipTokens() {
@@ -2408,18 +2650,31 @@ class Parser {
 		return TOp(op);
 	}
 
-	function constString( c:Const ):String {
+	function constString( c ) {
 		return switch(c) {
 			case CInt(v): Std.string(v);
 			case CFloat(f): Std.string(f);
-			case CString(s): s;
+			case CString(s): '"' + s + '"'; // TODO : escape + quote
+			#if !haxe3
+			case CInt32(v): Std.string(v);
+			#end
 		}
+	}
+
+	function constInterpString( s:Array<TokenList> ) {
+		var b = new StringBuf();
+		for(t in s)
+			for(tk in t)
+				b.add(tokenString(getTk(tk)));
+		return b.toString();
 	}
 
 	function tokenString( t:Token ):String {
 		return switch( t ) {
 			case TEof: "<eof>";
 			case TConst(c): constString(c);
+			case TInterpString(tg): constInterpString(tg);
+			case TRegex(r, opt): '~/' + r + '/' + opt;
 			case TId(s) | TOp(s): s;
 			case TPOpen: "(";
 			case TPClose: ")";
@@ -2435,8 +2690,6 @@ class Parser {
 			case TDoubleDot: ":";
 			case TMeta(id): "@" + id;
 			case TPrepro(id): "#" + id;
-			case TApostr: "<apostrophe>";
-			case TEreg: "~";
 		}
 	}
 

@@ -103,12 +103,166 @@ class Tools {
 		#end
 	}
 
+	public static inline function cleanError( e : Error ) {
+		#if hscriptPos
+		return e.e;
+		#else
+		return e;
+		#end
+	}
+
 	public static inline function mk( e : ExprDef, p : Expr ) {
 		#if hscriptPos
 		return { e : e, pmin : p.pmin, pmax : p.pmax, origin : p.origin, line : p.line };
 		#else
 		return e;
 		#end
+	}
+
+	public static function isValidBinOp(op:String):Bool {
+		if(op == ("??"+"=")) return true;
+		return switch(op) {
+			case "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^" | "<<" | ">>" | ">>>" | "==" | "!=" | ">=" | "<=" | ">" | "<" | "||" | "&&" | "is" | "=" | "??" | "..." | "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "|=" | "^=" | "<<=" | ">>=" | ">>>=": true;
+			case "=>": true;
+			default: false;
+		}
+	}
+
+	public static function getOpEnum(op:String):Binop {
+		return switch(op) {
+			case "+": OpAdd;
+			case "-": OpSub;
+			case "*": OpMult;
+			case "/": OpDiv;
+			case "%": OpMod;
+			case "&": OpAnd;
+			case "|": OpOr;
+			case "^": OpXor;
+			case "<<": OpShl;
+			case ">>": OpShr;
+			case ">>>": OpUShr;
+			case "==": OpEq;
+			case "!=": OpNotEq;
+			case ">=": OpGte;
+			case "<=": OpLte;
+			case ">": OpGt;
+			case "<": OpLt;
+			case "||": OpBoolOr;
+			case "&&": OpBoolAnd;
+			case "is": OpIs;
+			case "=": OpAssign;
+			case "=>": OpArrow;
+			case "??": OpNullCoal;
+			case "...": OpInterval;
+			default: {
+				var op2 = op.substr(0, op.length - 1);
+				if(isValidBinOp(op2)) {
+					return OpAssignOp(getOpEnum(op2));
+				}
+				throw "Unknown binary operator: " + op;
+			}
+		}
+	}
+
+	public static function getUnopEnum(op:String):Unop {
+		return switch(op) {
+			case "++": OpIncrement;
+			case "--": OpDecrement;
+			case "!": OpNot;
+			case "-": OpNeg;
+			case "~": OpNegBits;
+			case "...": OpSpread;
+			default: throw "Unknown unary operator: " + op;
+		}
+	}
+
+	static var priorities = [
+		["%"],
+		["*", "/"],
+		["+", "-"],
+		["<<", ">>", ">>>"],
+		["|", "&", "^"],
+		["==", "!=", ">", "<", ">=", "<="],
+		["..."],
+		["&&"],
+		["||"],
+		["=","+=","-=","*=","/=","%=","<<=",">>=",">>>=","|=","&=","^=","=>","??"+"="],
+		["->", "??"],
+		["is"]
+	];
+	public static function checkOpPrecedence(mainOp:String, leftOp:String, rightOp:String):Int {
+		var mainOpGroup = getOpGroup(mainOp);
+		var leftOpGroup = getOpGroup(leftOp);
+		var rightOpGroup = getOpGroup(rightOp);
+
+		var leftParam = false;
+		var rightParam = false;
+
+		if(leftOpGroup > mainOpGroup && leftOpGroup != -1) leftParam = true;
+		if(rightOpGroup > mainOpGroup && rightOpGroup != -1) rightParam = true;
+
+		if(!leftParam && !rightParam) {
+			var mainOpIndex = getOpIndex(mainOp);
+			var leftOpIndex = getOpIndex(leftOp);
+			var rightOpIndex = getOpIndex(rightOp);
+
+			if(mainOpGroup == rightOpGroup) {
+				if(rightOpIndex < mainOpIndex) rightParam = true;
+			}
+			if(leftOpGroup == mainOpGroup) {
+				if(leftOpIndex < mainOpIndex) leftParam = true;
+			}
+		}
+
+		// Convert to index
+		if(!leftParam && !rightParam) return -1;
+		if(leftParam && rightParam) return 2;
+		if(leftParam) return 0;
+		if(rightParam) return 1;
+		return -1;
+	}
+
+	public static function getOpIndex(op:String):Int {
+		if(op == "_") return -1;
+		var i = 0;
+		for(p in priorities) {
+			for(pp in p) {
+				if(op == pp)
+					return i;
+				i++;
+			}
+		}
+		return -1;
+	}
+
+	public static function getOpGroup(op:String):Int {
+		if(op == "_") return -1;
+		var i = 0;
+		for(p in priorities) {
+			for(pp in p) {
+				if(op == pp)
+					return i;
+			}
+			i++;
+		}
+		return -1;
+	}
+
+
+	public static function getEnum(cl:Enum<Dynamic>):Dynamic {
+		var enumThingy:Dynamic = {};
+		for (c in cl.getConstructors()) {
+			try {
+				UnsafeReflect.setField(enumThingy, c, cl.createByName(c));
+			} catch(e) {
+				try {
+					UnsafeReflect.setField(enumThingy, c, Reflect.makeVarArgs((args:Array<Dynamic>) -> cl.createByName(c, args)));
+				} catch(ex) {
+					throw e;
+				}
+			}
+		}
+		return enumThingy;
 	}
 
 }

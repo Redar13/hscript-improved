@@ -237,7 +237,6 @@ class Interp {
 		locals = new Map();
 		declared = new Array();
 		resetVariables();
-		initOps();
 		if (targetObj == null)
 			scriptObject = targetObj;
 	}
@@ -267,49 +266,6 @@ class Interp {
 			return cast {fileName: curExpr.origin, lineNumber: curExpr.line};
 		#end
 		return cast {fileName: "hscript", lineNumber: 0};
-	}
-
-	function initOps() {
-		var me = this;
-		binops = new Map();
-		binops.set("+", function(e1, e2) return me.expr(e1) + me.expr(e2));
-		binops.set("-", function(e1, e2) return me.expr(e1) - me.expr(e2));
-		binops.set("*", function(e1, e2) return me.expr(e1) * me.expr(e2));
-		binops.set("/", function(e1, e2) return me.expr(e1) / me.expr(e2));
-		binops.set("%", function(e1, e2) return me.expr(e1) % me.expr(e2));
-		binops.set("&", function(e1, e2) return me.expr(e1) & me.expr(e2));
-		binops.set("|", function(e1, e2) return me.expr(e1) | me.expr(e2));
-		binops.set("^", function(e1, e2) return me.expr(e1) ^ me.expr(e2));
-		binops.set("<<", function(e1, e2) return me.expr(e1) << me.expr(e2));
-		binops.set(">>", function(e1, e2) return me.expr(e1) >> me.expr(e2));
-		binops.set(">>>", function(e1, e2) return me.expr(e1) >>> me.expr(e2));
-		binops.set("==", function(e1, e2) return me.expr(e1) == me.expr(e2));
-		binops.set("!=", function(e1, e2) return me.expr(e1) != me.expr(e2));
-		binops.set(">=", function(e1, e2) return me.expr(e1) >= me.expr(e2));
-		binops.set("<=", function(e1, e2) return me.expr(e1) <= me.expr(e2));
-		binops.set(">", function(e1, e2) return me.expr(e1) > me.expr(e2));
-		binops.set("<", function(e1, e2) return me.expr(e1) < me.expr(e2));
-		binops.set("||", function(e1, e2) return me.expr(e1) == true || me.expr(e2) == true);
-		binops.set("&&", function(e1, e2) return me.expr(e1) == true && me.expr(e2) == true);
-		binops.set("is", checkIsType);
-		binops.set("=", assign);
-		binops.set("??", function(e1, e2) {
-			var expr1:Dynamic = me.expr(e1);
-			return expr1 == null ? me.expr(e2) : expr1;
-		});
-		binops.set("...", function(e1, e2) return new IntIterator(me.expr(e1), me.expr(e2)));
-		assignOp("+=", function(v1:Dynamic, v2:Dynamic) return v1 + v2);
-		assignOp("-=", function(v1:Float, v2:Float) return v1 - v2);
-		assignOp("*=", function(v1:Float, v2:Float) return v1 * v2);
-		assignOp("/=", function(v1:Float, v2:Float) return v1 / v2);
-		assignOp("%=", function(v1:Float, v2:Float) return v1 % v2);
-		assignOp("&=", function(v1, v2) return v1 & v2);
-		assignOp("|=", function(v1, v2) return v1 | v2);
-		assignOp("^=", function(v1, v2) return v1 ^ v2);
-		assignOp("<<=", function(v1, v2) return v1 << v2);
-		assignOp(">>=", function(v1, v2) return v1 >> v2);
-		assignOp(">>>=", function(v1, v2) return v1 >>> v2);
-		assignOp("??" + "=", function(v1, v2) return v1 == null ? v2 : v1);
 	}
 
 	function castExprByType(expr:Dynamic, ?type:CType):Dynamic {
@@ -384,18 +340,138 @@ class Interp {
 		}
 	}
 
-	function checkIsType(e1, e2):Bool {
+	/*function initOps() {
+		var me = this;
+		#if haxe3
+		binops = new Map();
+		#else
+		binops = new Hash();
+		#end
+		binops.set("+", function(e1, e2) return me.expr(e1) + me.expr(e2));
+		binops.set("-", function(e1, e2) return me.expr(e1) - me.expr(e2));
+		binops.set("*", function(e1, e2) return me.expr(e1) * me.expr(e2));
+		binops.set("/", function(e1, e2) return me.expr(e1) / me.expr(e2));
+		binops.set("%", function(e1, e2) return me.expr(e1) % me.expr(e2));
+		binops.set("&", function(e1, e2) return me.expr(e1) & me.expr(e2));
+		binops.set("|", function(e1, e2) return me.expr(e1) | me.expr(e2));
+		binops.set("^", function(e1, e2) return me.expr(e1) ^ me.expr(e2));
+		binops.set("<<", function(e1, e2) return me.expr(e1) << me.expr(e2));
+		binops.set(">>", function(e1, e2) return me.expr(e1) >> me.expr(e2));
+		binops.set(">>>", function(e1, e2) return me.expr(e1) >>> me.expr(e2));
+		binops.set("==", function(e1, e2) return me.expr(e1) == me.expr(e2));
+		binops.set("!=", function(e1, e2) return me.expr(e1) != me.expr(e2));
+		binops.set(">=", function(e1, e2) return me.expr(e1) >= me.expr(e2));
+		binops.set("<=", function(e1, e2) return me.expr(e1) <= me.expr(e2));
+		binops.set(">", function(e1, e2) return me.expr(e1) > me.expr(e2));
+		binops.set("<", function(e1, e2) return me.expr(e1) < me.expr(e2));
+		binops.set("||", function(e1, e2) return me.expr(e1) == true || me.expr(e2) == true);
+		binops.set("&&", function(e1, e2) return me.expr(e1) == true && me.expr(e2) == true);
+		binops.set("is", checkIsType);
+		binops.set("=", assign);
+		binops.set("??", function(e1, e2) {
+			var expr1:Dynamic = me.expr(e1);
+			return expr1 == null ? me.expr(e2) : expr1;
+		});
+		binops.set("...", function(e1, e2) return new
+			#if (haxe_211 || haxe3)
+			IntIterator
+			#else
+			IntIter
+			#end(me.expr(e1), me.expr(e2)));
+		assignOp("+=", function(v1:Dynamic, v2:Dynamic) return v1 + v2);
+		assignOp("-=", function(v1:Float, v2:Float) return v1 - v2);
+		assignOp("*=", function(v1:Float, v2:Float) return v1 * v2);
+		assignOp("/=", function(v1:Float, v2:Float) return v1 / v2);
+		assignOp("%=", function(v1:Float, v2:Float) return v1 % v2);
+		assignOp("&=", function(v1, v2) return v1 & v2);
+		assignOp("|=", function(v1, v2) return v1 | v2);
+		assignOp("^=", function(v1, v2) return v1 ^ v2);
+		assignOp("<<=", function(v1, v2) return v1 << v2);
+		assignOp(">>=", function(v1, v2) return v1 >> v2);
+		assignOp(">>>=", function(v1, v2) return v1 >>> v2);
+		assignOp("??"+"=", function(v1, v2) return v1 == null ? v2 : v1);
+	}*/
+
+	function runBinop(op:Binop, e1:Expr, e2:Expr):Dynamic {
+		return switch (op) {
+			case OpAdd: expr(e1) + expr(e2);
+			case OpSub: expr(e1) - expr(e2);
+			case OpMult: expr(e1) * expr(e2);
+			case OpDiv: expr(e1) / expr(e2);
+			case OpMod: expr(e1) % expr(e2);
+			case OpAnd: expr(e1) & expr(e2);
+			case OpOr: expr(e1) | expr(e2);
+			case OpXor: expr(e1) ^ expr(e2);
+			case OpShl: expr(e1) << expr(e2);
+			case OpShr: expr(e1) >> expr(e2);
+			case OpUShr: expr(e1) >>> expr(e2);
+			case OpEq: expr(e1) == expr(e2);
+			case OpNotEq: expr(e1) != expr(e2);
+			case OpGt: expr(e1) > expr(e2);
+			case OpGte: expr(e1) >= expr(e2);
+			case OpLt: expr(e1) < expr(e2);
+			case OpLte: expr(e1) <= expr(e2);
+			case OpBoolAnd: expr(e1) == true && expr(e2) == true;
+			case OpBoolOr: expr(e1) == true || expr(e2) == true;
+			//case OpIs: false;
+			case OpIs: checkIsType(e1, e2);
+			case OpInterval: {
+				new #if (haxe_211 || haxe3) IntIterator #else IntIter #end(expr(e1), expr(e2));
+			}
+			//case OpIn: false;
+			case OpNullCoal: {
+				var e1 = expr(e1);
+				if (e1 == null) expr(e2) else e1;
+			};
+			case OpAssign: assign(e1, e2);
+			case OpAssignOp(OpAdd): evalAssignOp((a:Dynamic, b:Dynamic) -> a + b, e1, e2);
+			case OpAssignOp(OpSub): evalAssignOp((a:Float, b:Float) -> a - b, e1, e2);
+			case OpAssignOp(OpMult): evalAssignOp((a:Float, b:Float) -> a * b, e1, e2);
+			case OpAssignOp(OpDiv): evalAssignOp((a:Float, b:Float) -> a / b, e1, e2);
+			case OpAssignOp(OpMod): evalAssignOp((a:Float, b:Float) -> a % b, e1, e2);
+			case OpAssignOp(OpAnd): evalAssignOp((a:Int, b:Int) -> a & b, e1, e2);
+			case OpAssignOp(OpOr): evalAssignOp((a:Int, b:Int) -> a | b, e1, e2);
+			case OpAssignOp(OpXor): evalAssignOp((a:Int, b:Int) -> a ^ b, e1, e2);
+			case OpAssignOp(OpShl): evalAssignOp((a:Int, b:Int) -> a << b, e1, e2);
+			case OpAssignOp(OpShr): evalAssignOp((a:Int, b:Int) -> a >> b, e1, e2);
+			case OpAssignOp(OpUShr): evalAssignOp((a:Int, b:Int) -> a >>> b, e1, e2);
+			case OpAssignOp(OpNullCoal): evalAssignOpOrderImportant((a:()->Dynamic, b:()->Dynamic) -> {
+				var a = a();
+				return a == null ? b() : a;
+			}, e1, e2);
+			default: error(EInvalidOp(Printer.getBinaryOp(op) + " " + op));
+
+			//case OpAssignOp(op): getBinaryOp(op)(e1, e2);
+
+			//assignOp("+=", function(v1:Dynamic, v2:Dynamic) return v1 + v2);
+			//assignOp("-=", function(v1:Float, v2:Float) return v1 - v2);
+			//assignOp("*=", function(v1:Float, v2:Float) return v1 * v2);
+			//assignOp("/=", function(v1:Float, v2:Float) return v1 / v2);
+			//assignOp("%=", function(v1:Float, v2:Float) return v1 % v2);
+			//assignOp("&=", function(v1, v2) return v1 & v2);
+			//assignOp("|=", function(v1, v2) return v1 | v2);
+			//assignOp("^=", function(v1, v2) return v1 ^ v2);
+			//assignOp("<<=", function(v1, v2) return v1 << v2);
+			//assignOp(">>=", function(v1, v2) return v1 >> v2);
+			//assignOp(">>>=", function(v1, v2) return v1 >>> v2);
+			//assignOp("??"+"=", function(v1, v2) return v1 == null ? v2 : v1);
+		}
+	}
+
+	function checkIsType(e1,e2): Bool {
 		var expr1:Dynamic = expr(e1);
 
-		return switch (Tools.expr(e2)) {
-			case EIdent("Class"):
-				Std.isOfType(expr1, Class);
-			case EIdent("Map" | "IMap"):
-				Std.isOfType(expr1, IMap);
+		switch(Tools.expr(e2)) {
+			case EIdent(id):
+				if (id == "Class")
+					return Std.isOfType(expr1, Class);
+				if (id == "Map" || id == "IMap")
+					return Std.isOfType(expr1, IMap);
 			default:
-				var expr2:Dynamic = expr(e2);
-				expr2 != null ? Std.isOfType(expr1, expr2) : false;
 		}
+
+		var expr2:Dynamic = expr(e2);
+		return expr2 != null ? Std.isOfType(expr1, expr2) : false;
 	}
 
 	public inline function getCurOrigin():String
@@ -548,11 +624,11 @@ class Interp {
 
 	function assignOp(op, fop:Dynamic->Dynamic->Dynamic) {
 		var me = this;
-		binops.set(op, function(e1, e2) return me.evalAssignOp(op, fop, e1, e2));
+		binops.set(op, function(e1, e2) return me.evalAssignOp(fop, e1, e2));
 	}
 
-	function evalAssignOp(op, fop, e1, e2):Dynamic {
-		var v;
+	function evalAssignOp(fop:(a:Dynamic, b:Dynamic)->Dynamic, e1, e2):Dynamic {
+		var v:Dynamic = null;
 		switch (Tools.expr(e1)) {
 			case EIdent(id):
 				v = fop(expr(e1), expr(e2));
@@ -622,7 +698,61 @@ class Interp {
 					arr[index] = v;
 				}
 			default:
-				return error(EInvalidOp(op));
+				return error(ECustom("Unknown field when handing assign operation"));
+		}
+		return v;
+	}
+
+	function evalAssignOpOrderImportant(fop:(a:()->Dynamic, b:()->Dynamic)->Dynamic, e1, e2):Dynamic {
+		var aFunc:()->Dynamic = () -> expr(e1);
+		var bFunc:()->Dynamic = () -> expr(e2);
+		var v:Dynamic = null;
+		switch (Tools.expr(e1)) {
+			case EIdent(id):
+				var l = locals[id];
+				v = fop(aFunc, bFunc);
+				if (l == null) {
+					if(_hasScriptObject) {
+						if(_scriptObjectType == SObject) {
+							UnsafeReflect.setField(scriptObject, id, v);
+							return v;
+						} else if(_scriptObjectType == SBehaviourClass) {
+							var obj = cast(scriptObject, IHScriptCustomBehaviour);
+							return obj.hset(id, v);
+						}
+
+						if (__instanceFields.contains(id)) {
+							UnsafeReflect.setProperty(scriptObject, id, v);
+						} else if (__instanceFields.contains('set_$id')) { // setter
+							UnsafeReflect.getProperty(scriptObject, 'set_$id')(v);
+						} else {
+							setVar(id, v);
+						}
+					} else {
+						setVar(id, v);
+					}
+				}
+				else
+					l.r = v;
+			case EField(e, f, s):
+				var obj = expr(e);
+				if(s && obj == null) return null;
+				v = fop(() ->get(obj, f), bFunc);
+				v = set(obj, f, v);
+			case EArray(e, index):
+				var arr:Dynamic = expr(e);
+				var index:Dynamic = expr(index);
+				if (isMap(arr)) {
+					var map = getMap(arr);
+
+					v = fop(()->map.get(index), bFunc);
+					map.set(index, v);
+				} else {
+					v = fop(()->arr[index], bFunc);
+					arr[index] = v;
+				}
+			default:
+				return error(ECustom("Unknown field when handing assign operation"));
 		}
 		return v;
 	}
@@ -1065,28 +1195,28 @@ class Interp {
 					return null;
 				return get(field, f);
 			case EBinop(op, e1, e2):
-				var fop = binops.get(op);
-				if (fop == null)
-					error(EInvalidOp(op));
-				return fop(e1, e2);
+				//var fop = binops.get(op);
+				//if (fop == null)
+				//	error(EInvalidOp(op));
+				return runBinop(op, e1, e2);
 			case EUnop(op, prefix, e):
 				switch (op) {
-					case "!":
-						return expr(e) != true;
-					case "-":
-						return -expr(e);
-					case "++":
+					case OpIncrement:
 						return increment(e, prefix, 1);
-					case "--":
+					case OpDecrement:
 						return increment(e, prefix, -1);
-					case "~":
-						#if neko
+					case OpNot:
+						return expr(e) != true;
+					case OpNeg:
+						return -expr(e);
+					case OpNegBits:
+						#if (neko && !haxe3)
 						return haxe.Int32.complement(expr(e));
 						#else
 						return ~expr(e);
 						#end
-					default:
-						error(EInvalidOp(op));
+					case OpSpread:
+						error(EInvalidOp("..."));
 				}
 			case ECall(e, params):
 				switch (Tools.expr(e)) {
@@ -1097,7 +1227,7 @@ class Interp {
 							if (maybeFunc != null)
 							{
 								var args = [for (p in params) expr(p)];
-								args.insert(0, null);
+								args.unshift(null);
 								return call(null, maybeFunc, args);
 							}
 							if (s)
@@ -1106,23 +1236,37 @@ class Interp {
 						}
 						if (f == "bind" && UnsafeReflect.isFunction(obj))
 						{
-							var inputArgs:Array<Argument> = [];
+							if (params.length == 0)
+								return expr(mk(EFunction([], mk(ECall(e, [])))));
 							var backendArgs:Array<Expr> = [];
+							var inputArgs:Array<Argument> = [];
+							var innerVars:Array<Expr> = [];
 							var i:Int = 0;
 							for (p in params)
 							{
-								if (Tools.expr(p).match(EIdent("_")))
+								switch (Tools.expr(p))
 								{
-									i++;
-									inputArgs.push({name: '___arg$i'});
-									backendArgs.push(mk(EIdent('___arg$i')));
-								}
-								else
-								{
-									backendArgs.push(p);
+									case EIdent("_"):
+										i++;
+										inputArgs.push(new Argument('___arg$i'));
+										backendArgs.push(mk(EIdent('___arg$i')));
+									case EConst(_):
+										backendArgs.push(p);
+									default:
+										i++;
+										innerVars.push(mk(EVar('___arg$i', null, p)));
+										backendArgs.push(mk(EIdent('___arg$i')));
 								}
 							}
-							return expr(mk(EFunction(inputArgs, mk(ECall(e, backendArgs)))));
+							if (innerVars.length > 0)
+							{
+								innerVars.push(mk(EFunction(inputArgs, mk(ECall(e, backendArgs)))));
+								return expr(mk(EBlock(innerVars)));
+							}
+							else
+							{
+								return expr(mk(EFunction(inputArgs, mk(ECall(e, backendArgs)))));
+							}
 						}
 						else
 						{
@@ -1150,10 +1294,10 @@ class Interp {
 				returnValue = e == null ? null : expr(e);
 				throw SReturn;
 			case EFunction(params, fexpr, name, type, access):
-				var capturedLocals:Map<String, DeclaredVar> = [for (k => e in locals)
+				var capturedLocals:Map<String, DeclaredVar> = new Map();
+				for (k => e in locals)
 					if (e != null && e.depth > 0)
-						k => e
-				];
+						capturedLocals.set(k, e);
 
 				var me:Interp = this;
 				var hasOpt:Bool = false;
@@ -1171,7 +1315,7 @@ class Interp {
 					if (me.locals == null || me.variables == null)
 						return null;
 
-					if (((args == null) ? 0 : args.length) != params.length) {
+					if ((args == null ? 0 : args.length) != params.length) {
 						if (args.length < minParams) {
 							var str:String = "Invalid number of parameters. Got " + args.length + ", required " + minParams;
 							if (name != null)
@@ -1179,22 +1323,20 @@ class Interp {
 							error(ECustom(str));
 						}
 						// make sure mandatory args are forced
-						var args2 = [];
 						var extraParams:Int = args.length - minParams;
 						var pos:Int = 0;
-						for (p in params) {
+						for (i => p in params) {
 							if (p.opt) {
 								if (extraParams > 0) {
-									args2.push(castExprByType(args[pos++], p.t));
+									args[i] = castExprByType(args[pos++], p.t);
 									extraParams--;
 								} else {
-									args2.push(null);
+									args[i] = p.value == null ? null : castExprByType(expr(p.value), p.t);
 								}
 							} else {
-								args2.push(castExprByType(args[pos++], p.t));
+								args[i] = castExprByType(args[pos++], p.t);
 							}
 						}
-						args = args2;
 					}
 					var old = me.locals, depth = me.depth;
 					me.depth++;
@@ -1248,14 +1390,14 @@ class Interp {
 				if (wantedType != null) {
 					isMap = wantedType.match(CTPath(["Map"], [_, _]));
 				} else {
-					isMap = arr.length > 0 && Tools.expr(arr[0]).match(EBinop("=>", _));
+					isMap = arr.length > 0 && Tools.expr(arr[0]).match(EBinop(OpArrow, _));
 				}
 				if (isMap) {
-					var keys = [];
-					var values = [];
+					var keys:Array<Dynamic> = [];
+					var values:Array<Dynamic> = [];
 					for (e in arr) {
 						switch (Tools.expr(e)) {
-							case EBinop("=>", eKey, eValue):
+							case EBinop(OpArrow, eKey, eValue):
 								keys.push(expr(eKey));
 								values.push(expr(eValue));
 							default: throw("=> expected");
@@ -1656,7 +1798,7 @@ class Interp {
 		var func:Function = usingFunctions.get(f); // todo?: ignore @:noUsing
 		if (func != null)
 		{
-			args.insert(0, o);
+			args.unshift(o);
 			return call(o, func, args);
 		}
 		func = get(o, f);

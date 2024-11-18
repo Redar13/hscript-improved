@@ -554,9 +554,5 @@ class PolymodScriptClass
 	}
 }
 
-
-class TemplateClassBase {
-	public function new() { }
-}
 @:hscriptClass
-class TemplateClass extends TemplateClassBase implements hscript.HScriptedClass { } // TODO: Allow made hscriptedClass for non extenden class
+class TemplateClass implements hscript.HScriptedClass {}

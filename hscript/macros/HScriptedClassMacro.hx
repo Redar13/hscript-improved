@@ -20,6 +20,8 @@ class HScriptedClassMacro
 	 */
 	public static macro function build():Array<Field>
 	{
+		#if !display
+		if (Context.defined("display")) return null;
 		var cls:ClassType = Context.getLocalClass().get();
 
 		if (cls.meta.get().find(m -> return m.name == 'hscriptClassPreProcessed') == null)
@@ -28,10 +30,8 @@ class HScriptedClassMacro
 			var fields:Array<Field> = Context.getBuildFields().copy();
 
 			// trace('    ${cls.name}');
-			if (cls.superClass != null)
-			{
-				fields = fields.concat(buildScriptedClassUtils(cls, cls.superClass.t.get()));
-			}
+			for (i in buildScriptedClassUtils(cls))
+				fields.push(i);
 
 			fields = buildHScriptClass(cls, fields);
 
@@ -46,6 +46,7 @@ class HScriptedClassMacro
 		{
 			// Already processed.
 		}
+		#end
 
 		// Returning null is equal to "don't do anything".
 		return null;
@@ -215,7 +216,7 @@ class HScriptedClassMacro
 		};
 	}
 
-	static function buildScriptedClassUtils(cls:ClassType, superCls:ClassType):Array<Field>
+	static function buildScriptedClassUtils(cls:ClassType):Array<Field>
 	{
 		/*
 		var function_scriptGet:Field = {

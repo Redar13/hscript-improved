@@ -175,10 +175,6 @@ class UnsafeReflect {
 
 	@:overload(function(f:Array<Dynamic>->Void):Dynamic {})
 	public static function makeVarArgs(f:Array<Dynamic>->Dynamic):Dynamic {
-		#if cpp
-		return untyped __global__.__hxcpp_create_var_args(f);
-		#else
 		return inline Reflect.makeVarArgs(f);
-		#end
 	}
 }
