@@ -687,11 +687,14 @@ class Parser {
 	}
 
 	function parseLambda( args : Array<Argument>, pmin:Int ) {
+		var id;
+		var t;
+		var tk;
 		while( true ) {
-			var id = getIdent();
-			var t = maybe(TDoubleDot) ? parseType() : null;
+			id = getIdent();
+			t = maybe(TDoubleDot) ? parseType() : null;
 			args.push(new Argument(id, t));
-			var tk = token();
+			tk = token();
 			switch( tk ) {
 				case TComma:
 				case TPClose:
@@ -702,8 +705,7 @@ class Parser {
 			}
 		}
 		ensureToken(TOp("->"));
-		var eret = parseExpr();
-		return mk(EFunction(args, mk(EReturn(eret),pmin)), pmin);
+		return mk(EFunction(args, mk(EReturn(parseExpr()),pmin)), pmin);
 	}
 
 	function parseMetaArgs() {
@@ -719,11 +721,11 @@ class Parser {
 			while( true ) {
 				args.push(parseExpr());
 				switch( token() ) {
-				case TComma:
-				case TPClose:
-					break;
-				case tk:
-					unexpected(tk);
+					case TComma:
+					case TPClose:
+						break;
+					case tk:
+						unexpected(tk);
 				}
 			}
 		}
@@ -751,9 +753,8 @@ class Parser {
 		return mk(edef, pmin(e), pmax(e));
 	}
 
-	function makeUnop( op:String, e:Expr ):Expr {
-		var op = Tools.getUnopEnum(op);
-		return _makeUnop(op, e);
+	inline function makeUnop( op:String, e:Expr ):Expr {
+		return _makeUnop(Tools.getUnopEnum(op), e);
 	}
 
 	function _makeUnop( op:Unop, e:Expr ):Expr {
@@ -770,8 +771,7 @@ class Parser {
 		// TODO: clean this up
 		if(!Tools.isValidBinOp(op))
 			error(EInvalidOp(op),pmin(e1),pmax(e1));
-		var op = Tools.getOpEnum(op);
-		return _makeBinop(op, e1, e);
+		return _makeBinop(Tools.getOpEnum(op), e1, e);
 	}
 
 	function _makeBinop( op:Binop, e1:Expr, e:Expr ) {
@@ -827,34 +827,31 @@ class Parser {
 				mk(EIf(cond,e1,e2),p1,(e2 == null) ? tokenMax : pmax(e2));
 			case "override":
 				nextIsOverride = true;
-				var nextToken = token();
-				switch(nextToken) {
+				switch(token()) {
 					case TId(_i = "private" | "public" | "inline" | "function" | "static" | "var" | "final"):
 						var str = parseStructure(_i);
 						nextIsOverride = false;
 						str;
-					default:
+					case nextToken:
 						unexpected(nextToken);
 						nextIsOverride = false;
 						null;
 				}
 			case "static":
 				nextIsStatic = true;
-				var nextToken = token();
-				switch(nextToken) {
+				switch(token()) {
 					case TId(_i = "private" | "public" | "inline" | "function" | "override" | /* "class" |*/ "var" | "final"):
 						var str = parseStructure(_i);
 						nextIsStatic = false;
 						str;
-					default:
+					case nextToken:
 						unexpected(nextToken);
 						nextIsStatic = false;
 						null;
 				}
 			case "public":
 				nextIsPublic = true;
-				var nextToken = token();
-				switch(nextToken) {
+				switch(token()) {
 					case TId(_i = "class" | "static" | "inline" | "function" | "override" | "var" | "final"):
 						var str = parseStructure(_i);
 						nextIsPublic = false;
@@ -863,47 +860,44 @@ class Parser {
 					//	var str = parseStructure("private"); // public private
 					//	nextIsPublic = false;
 					//	str;
-					default:
+					case nextToken:
 						unexpected(nextToken);
 						nextIsPublic = false;
 						null;
 				}
 			case "private":
 				nextIsPrivate = true;
-				var nextToken = token();
-				switch(nextToken) {
+				switch(token()) {
 					case TId(_i = "static" | "function" | "inline" | "override" | "var" | "final" | "class"):
 						var str = parseStructure(_i);
 						nextIsPrivate = false;
 						str;
-					default:
+					case nextToken:
 						unexpected(nextToken);
 						nextIsPrivate = false;
 						null;
 				}
 			case "inline":
 				nextIsInline = true;
-				var nextToken = token();
-				switch(nextToken) {
+				switch(token()) {
 					case TId(_i = "static" | "function" | "override" | "var" | "final" | "class" | "private"):
 						var str = parseStructure(_i);
 						nextIsInline = false;
 						str;
-					default:
+					case nextToken:
 						unexpected(nextToken);
 						nextIsInline = false;
 						null;
 				}
 			case "var" | "final":
 				if(id == "final") {
-					var nextToken = token();
-					switch(nextToken) {
+					switch(token()) {
 						case TId(_i = "class" | "function"):
 							nextIsFinal = true;
 							var str = parseStructure(_i); // final class | function
 							nextIsFinal = false;
 							return str;
-						default:
+						case nextToken:
 							push(nextToken);
 					}
 				}
@@ -937,11 +931,10 @@ class Parser {
 				mk(EWhile(econd,e),p1,pmax(e));
 			case "do":
 				var e = parseExpr();
-				var tk = token();
-				switch(tk)
+				switch(token())
 				{
 					case TId("while"): // Valid
-					default: unexpected(tk);
+					case tk: unexpected(tk);
 				}
 				var econd = parseExpr();
 				mk(EDoWhile(econd,e),p1,pmax(econd));
@@ -969,16 +962,15 @@ class Parser {
 			// 	if( !maybe(TId("function")) ) unexpected(TId("inline"));
 			// 	return parseStructure("function");
 			case "function":
-				var tk = token();
 				var name = null;
-				switch( tk ) {
+				switch( token() ) {
 					case TId(id): name = id;
-					default: push(tk);
+					case tk: push(tk);
 				}
 				var inf = parseFunctionDecl();
 
-				var tk = token();
-				push(tk);
+				push(token());
+
 				mk(EFunction(
 						inf.args, inf.body,
 						name, inf.ret,
@@ -986,8 +978,7 @@ class Parser {
 					), p1, pmax(inf.body));
 			case "import":
 				var oldReadPos = readPos;
-				var tk = token();
-				switch( tk ) {
+				switch( token() ) {
 					case TPOpen:
 						var tok = token();
 						switch(tok) {
@@ -1044,15 +1035,14 @@ class Parser {
 						push(TSemicolon);
 						var p = path.join(".");
 						mk(star ? EImportStar(p) : EImport(p, asname), p1);
-					default:
+					case tk:
 						unexpected(tk);
 						null;
 					}
 
 				case "using":
 					var oldReadPos = readPos;
-					var tk = token();
-					switch( tk ) {
+					switch( token() ) {
 						case TPOpen:
 							var tok = token();
 							switch(tok) {
@@ -1092,10 +1082,10 @@ class Parser {
 							push(TSemicolon);
 							var p = path.join(".");
 							mk(EUsing(p), p1);
-						default:
+						case tk:
 							unexpected(tk);
 							null;
-						}
+					}
 
 			case "class":
 				// example: class ClassName
@@ -1197,8 +1187,8 @@ class Parser {
 
 				this.origin = oldOrigin;
 
-				var tk = token();
-				push(tk);
+				push(token());
+
 				mk(EClass(name, fields, extend, interfaces, nextIsFinal, nextIsPrivate), p1);
 
 			case "return":
@@ -1210,19 +1200,17 @@ class Parser {
 				var a = new Array();
 				a.push(getIdent());
 				while( true ) {
-					var tk = token();
-					switch( tk ) {
+					switch( token() ) {
 						case TDot:
 							a.push(getIdent());
 						case TPOpen:
 							break;
-						default:
+						case tk:
 							unexpected(tk);
 							break;
 					}
 				}
-				var args = parseExprList(TPClose);
-				mk(ENew(a.join("."), args), p1);
+				mk(ENew(a.join("."), parseExprList(TPClose)), p1);
 			case "throw":
 				var e = parseExpr();
 				mk(EThrow(e),p1,pmax(e));
@@ -1385,8 +1373,11 @@ class Parser {
 		var tk = token();
 		if( tk != TPClose ) {
 			var done = false;
+			var name, opt;
+			var arg : Argument;
 			while( !done ) {
-				var name = null, opt = false;
+				name = null;
+				opt = false;
 				switch( tk ) {
 					case TQuestion:
 						opt = true;
@@ -1399,7 +1390,7 @@ class Parser {
 						unexpected(tk);
 						break;
 				}
-				var arg : Argument = new Argument(name);
+				arg = new Argument(name);
 				args.push(arg);
 				if( opt ) arg.opt = true;
 				if( allowTypes ) {
@@ -1436,22 +1427,23 @@ class Parser {
 				ret = parseType();
 		}
 		final expr = parseExpr();
-		switch (expr.e)
+		switch (Tools.expr(expr))
 		{
 			case EBlock(exprBlock): // Fix function without return
-				if (!exprBlock[exprBlock.length - 1].e.match(EReturn(_)))
+				if (exprBlock.length == 0 || !Tools.expr(exprBlock[exprBlock.length - 1]).match(EReturn(_)))
 				{
 					exprBlock.push(mk(EReturn(null)));
 				}
-			case _:
+			default:
 		}
 		return { args : args, ret : ret, body : expr };
 	}
 
 	function parsePath() {
 		var path = [getIdent()];
+		var t;
 		while( true ) {
-			var t = token();
+			t = token();
 			if( t != TDot ) {
 				push(t);
 				break;
@@ -1640,8 +1632,9 @@ class Parser {
 		allowTypes = true;
 		allowMetadata = true;
 		var decls = [];
+		var tk;
 		while( true ) {
-			var tk = token();
+			tk = token();
 			if( tk == TEof ) break;
 			push(tk);
 			decls.push(parseModuleDecl());
@@ -1651,8 +1644,9 @@ class Parser {
 
 	function parseMetadata() : Metadata {
 		var meta = [];
+		var tk;
 		while( true ) {
-			var tk = token();
+			tk = token();
 			switch( tk ) {
 				case TMeta(name):
 					meta.push({ name : name, params : parseMetaArgs() });
@@ -1717,8 +1711,9 @@ class Parser {
 				var extend = null;
 				var implement = [];
 
+				var t;
 				while( true ) {
-					var t = token();
+					t = token();
 					switch( t ) {
 						case TId("extends"):
 							extend = parseType();
@@ -1771,8 +1766,9 @@ class Parser {
 	function parseField() : FieldDecl {
 		var meta = parseMetadata();
 		var access = [];
+		var id;
 		while( true ) {
-			var id = getIdent();
+			id = getIdent();
 			switch( id ) {
 				case "override":
 					access.push(AOverride);
@@ -1875,21 +1871,22 @@ class Parser {
 		var ce = ""; // current escape
 		var lc = 0; // last char
 		function readEscape() {
-			var c = lc = readChar();
-			if( StringTools.isEof(c) ) {
+			lc = readChar();
+			if( StringTools.isEof(lc) ) {
 				line = old;
 				error(EUnterminatedString, p1, p1);
 				return -1;
 			}
-			ce += String.fromCharCode(c);
-			return c;
+			ce += String.fromCharCode(lc);
+			return lc;
 		}
 		var interpolation = false;
 		var interpBlock = false; // true == {} is required | false == no {}
 		var interpString:Array<TokenList> = null;
+		var arr:TokenList;
 		while( true ) {
 			if(interpolation) {
-				var arr:TokenList = getTokenList(TPOpen);
+				arr = getTokenList(TPOpen);
 
 				if(interpBlock) {
 					var depthStack:Array<Token> = [TBrClose];
@@ -1943,7 +1940,7 @@ class Parser {
 				continue;
 			}
 
-			var c = readChar();
+			c = readChar();
 			if( StringTools.isEof(c) ) {
 				line = old;
 				error(EUnterminatedString, p1, p1);
@@ -1966,8 +1963,9 @@ class Parser {
 					case '0'.code | '1'.code | '2'.code | '3'.code | '4'.code | '5'.code | '6'.code | '7'.code: // Octal \000-\377
 						var n = c - '0'.code;
 						var i = 0;
+						var char;
 						for( i in 0...2 ) { // 2 since we already read the first digit
-							var char = readEscape();
+							char = readEscape();
 							if(char == -1) break;
 
 							n *= 8;
@@ -1982,8 +1980,9 @@ class Parser {
 					case "x".code: // Hexadecimal \x00-\xFF
 						if( !allowJSON ) invalidChar(c);
 						var k = 0;
+						var char;
 						for( i in 0...2 ) {
-							var char = readEscape();
+							char = readEscape();
 							if(char == -1) break;
 
 							k <<= 4;
@@ -2008,8 +2007,9 @@ class Parser {
 							ce += "{";
 							var k = 0;
 							var i = 0;
+							var char;
 							while( true ) {
-								var char = readEscape();
+								char = readEscape();
 								if(char == -1 || char == '}'.code) break;
 								if( i > 6 ) {
 									error(EInvalidEscape(ce), p1, p1);
@@ -2031,8 +2031,9 @@ class Parser {
 							readPos--;
 						}
 						var k = 0;
+						var char;
 						for( i in 0...4 ) {
-							var char = readEscape();
+							char = readEscape();
 							if(char == -1) break;
 
 							k <<= 4;
@@ -2382,8 +2383,9 @@ class Parser {
 		var regex = new StringBuf();
 		var esc = false;
 		var start = readPos-2;
+		var char;
 		while( true ) {
-			var char = readChar();
+			char = readChar();
 			if(StringTools.isEof(char))
 				error(EUnterminatedRegex, start, start);
 			if( char == "\n".code || char == "\r".code )
@@ -2442,8 +2444,9 @@ class Parser {
 				push(TPOpen);
 				parseExpr();
 			case TId(id):
+				var tk;
 				while(true) {
-					var tk = token();
+					tk = token();
 					if(tk == TDot) {
 						id += ".";
 						tk = token();
@@ -2553,8 +2556,9 @@ class Parser {
 				skipTokens();
 				return token();
 			case "else", "elseif" if( preprocStack.length > 0 ):
-				if( preprocStack[preprocStack.length - 1].r ) {
-					preprocStack[preprocStack.length - 1].r = false;
+				var last = preprocStack[preprocStack.length - 1];
+				if( last.r ) {
+					last.r = false;
 					skipTokens();
 					return token();
 				} else if( id == "else" ) {

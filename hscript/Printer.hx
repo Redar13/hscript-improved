@@ -50,8 +50,7 @@ class Printer {
 	function type( t : CType ) {
 		switch( t ) {
 			case CTOpt(t):
-				add('?');
-				type(t);
+				add('?'); type(t);
 			case CTPath(path, params):
 				add(path.join("."));
 				if( params != null ) {
@@ -64,9 +63,7 @@ class Printer {
 					add(">");
 				}
 			case CTNamed(name, t):
-				add(name);
-				add(':');
-				type(t);
+				add(name); add(':'); type(t);
 			case CTFun(args, ret) if (Lambda.exists(args, function (a) return a.match(CTNamed(_, _)))):
 				add('(');
 				for (a in args)
@@ -96,9 +93,7 @@ class Printer {
 				}
 				add(first ? "}" : " }");
 			case CTParent(t):
-				add("(");
-				type(t);
-				add(")");
+				add("("); type(t); add(")");
 		}
 	}
 
@@ -150,10 +145,13 @@ class Printer {
 			case EIdent(v):
 				add(v);
 			case EVar(n, t, e, a):
-				var aStr = Std.string(a);
-				add(aStr);
-				if (aStr.length > 0)
-					add(" ");
+				if (a != null)
+				{
+					var aStr = Std.string(a);
+					add(aStr);
+					if (aStr.length > 0)
+						add(" ");
+				}
 				add(a.isFinal ? "final " : "var ");
 				add(n);
 				addType(t);
@@ -218,9 +216,7 @@ class Printer {
 				}
 				add(")");
 			case EIf(cond,e1,e2):
-				add("if (");
-				expr(cond);
-				add(") ");
+				add("if ("); expr(cond); add(") ");
 				expr(e1);
 				if( e2 != null ) {
 					add(" else ");
@@ -232,7 +228,7 @@ class Printer {
 				add(" ");
 				expr(e);
 			case EDoWhile(cond,e):
-				add("do ");
+				add("do");
 				expr(e);
 				add(" while ");
 				expr(cond);
@@ -251,9 +247,11 @@ class Printer {
 				add("continue");
 			case EFunction(params, e, name, ret, a):
 				var aStr = Std.string(a);
-				add(aStr);
 				if (aStr.length > 0)
+				{
+					add(aStr);
 					add(" ");
+				}
 				add("function");
 				if( name != null )
 					add(" " + name);
@@ -318,7 +316,8 @@ class Printer {
 					add("{\n");
 					for( f in fl ) {
 						add(tabs);
-						add(f.name+" : ");
+						add(f.name);
+						add(" : ");
 						expr(f.e);
 						add(",\n");
 					}
@@ -452,7 +451,7 @@ class Printer {
 		}
 	}
 
-	public static function errorToString( e : Expr.Error ) {
+	public #if !hscriptPos inline #end static function errorToString( e : Expr.Error ) {
 		#if hscriptPos
 		return e.origin + ":" + e.line + ": " + errorToStringMessage(e);
 		#else

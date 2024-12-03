@@ -197,7 +197,7 @@ class Interp {
 	public var errorHandler:Error->Void;
 	public var importFailedCallback:Array<String>->Bool;
 	public var onMetadata:String->Array<Expr>->Expr->Dynamic;
-	public var customClasses:Map<String, Dynamic>;
+	public var customClasses:Map<String, ExprDef>;
 	public var variables:Map<String, Dynamic>;
 	public var usingFunctions:Map<String, Function>;
 	public var publicVariables:Map<String, Dynamic>;
@@ -243,7 +243,7 @@ class Interp {
 
 	private function resetVariables() {
 		usingFunctions = new Map<String, Function>();
-		customClasses = new Map<String, Dynamic>();
+		customClasses = new Map<String, ExprDef>();
 		variables = new Map<String, Dynamic>();
 		publicVariables = new Map<String, Dynamic>();
 		staticVariables = new Map<String, Dynamic>();
@@ -489,10 +489,6 @@ class Interp {
 
 	public function varExists(name:String):Bool {
 		return allowStaticVariables && staticVariables.exists(getStaticVariableName(name)) || allowPublicVariables && publicVariables.exists(name) || variables.exists(name);
-	}
-
-	public function findScriptClassDescriptor(name:String) {
-		return _scriptClassDescriptors.get(name);
 	}
 
 	public function setVar(name:String, v:Dynamic) {
@@ -873,7 +869,7 @@ class Interp {
 		}
 	}
 
-	inline function mk(e:ExprDef, ?origin:Null<String>, ?pmin:Null<Int>, ?pmax:Null<Int>, ?line:Null<Int> ):Expr {
+	function mk(e:ExprDef, ?origin:Null<String>, ?pmin:Null<Int>, ?pmax:Null<Int>, ?line:Null<Int> ):Expr {
 		#if hscriptPos
 		if (origin == null) origin = curExpr.origin;
 		if (pmin == null) pmin = curExpr.pmin;
@@ -1238,7 +1234,7 @@ class Interp {
 						{
 							if (params.length == 0)
 								return expr(mk(EFunction([], mk(ECall(e, [])))));
-							var backendArgs:Array<Expr> = [];
+							var embedArgs:Array<Expr> = [];
 							var inputArgs:Array<Argument> = [];
 							var innerVars:Array<Expr> = [];
 							var i:Int = 0;
@@ -1249,23 +1245,23 @@ class Interp {
 									case EIdent("_"):
 										i++;
 										inputArgs.push(new Argument('___arg$i'));
-										backendArgs.push(mk(EIdent('___arg$i')));
+										embedArgs.push(mk(EIdent('___arg$i')));
 									case EConst(_):
-										backendArgs.push(p);
+										embedArgs.push(p);
 									default:
 										i++;
 										innerVars.push(mk(EVar('___arg$i', null, p)));
-										backendArgs.push(mk(EIdent('___arg$i')));
+										embedArgs.push(mk(EIdent('___arg$i')));
 								}
 							}
 							if (innerVars.length > 0)
 							{
-								innerVars.push(mk(EFunction(inputArgs, mk(ECall(e, backendArgs)))));
+								innerVars.push(mk(EFunction(inputArgs, mk(ECall(e, embedArgs)))));
 								return expr(mk(EBlock(innerVars)));
 							}
 							else
 							{
-								return expr(mk(EFunction(inputArgs, mk(ECall(e, backendArgs)))));
+								return expr(mk(EFunction(inputArgs, mk(ECall(e, embedArgs)))));
 							}
 						}
 						else
@@ -1300,11 +1296,24 @@ class Interp {
 						capturedLocals.set(k, e);
 
 				var me:Interp = this;
-				var hasOpt:Bool = false;
+				// var hasOpt:Bool = false;
 				var minParams:Int = 0;
 				for (p in params) {
 					if (p.opt) {
-						hasOpt = true;
+						// hasOpt = true;
+						if (p.value == null) {
+							p.value = switch (p.t) {
+								case CTPath([type], null):
+									switch(type)
+									{
+										case "Int": mk(EConst(CInt(0)));
+										case "Float": mk(EConst(CFloat(0)));
+										case "Bool": mk(EIdent("false"));
+										default: null;
+									}
+								default: null;
+							}
+						}
 					} else {
 						minParams++;
 					}
@@ -1453,11 +1462,12 @@ class Interp {
 				var val:Dynamic = expr(e);
 				var match = false;
 				for (c in cases) {
-					for (v in c.values)
+					for (v in c.values) { // TODO: Pattern Matching
 						if (expr(v) == val) {
 							match = true;
 							break;
 						}
+					}
 					if (match) {
 						val = expr(c.expr);
 						break;
@@ -1567,17 +1577,7 @@ class Interp {
 		restore(old);
 	}
 
-	private function registerScriptClass(c:ClassDeclEx) {
-		var name = c.name;
-		if (c.pkg != null) {
-			name = c.pkg.join(".") + "." + name;
-		}
-		_scriptClassDescriptors.set(name, c);
-	}
-
-	private var _scriptClassDescriptors:Map<String, ClassDeclEx> = new Map<String, ClassDeclEx>();
-
-	function whileLoop(econd, e) {
+	inline function whileLoop(econd, e) {
 		var old = declared.length;
 		while (expr(econd) == true) {
 			try {
@@ -1802,13 +1802,13 @@ class Interp {
 			return call(o, func, args);
 		}
 		func = get(o, f);
-		// #if html
+		#if html
 		// Workaround for an HTML5-specific issue.
 		// https://github.com/HaxeFoundation/haxe/issues/11298
 		if (func == null && f == "contains") {
 			func = get(o, "includes");
 		}
-		// #end
+		#end
 
 		// if(func == null && o == scriptObject && _scriptObjectType == SCustomClass) {
 		// 	return UnsafeReflect.callMethod(scriptObject, UnsafeReflect.field(scriptObject, "__hsx_super_" + f), args);
@@ -1858,7 +1858,6 @@ class Interp {
 			case EClass(_, fields, extend, interfaces):
 				// try
 				// {
-				var scriptedCls:Dynamic;
 				if (extend == null)
 					return UnsafeReflect.field(hscript.custom_classes.TemplateClass, "__hsx_init")(cl, this, args);
 
@@ -1867,19 +1866,19 @@ class Interp {
 					// trace(variable);
 					return UnsafeReflect.field(variable, "__hsx_init")(cl, this, args);
 				}
-				scriptedCls = variable == null ? extend : Type.getClassName(variable);
+				var scriptedCls:Dynamic = variable == null ? extend : Type.getClassName(variable);
 				if (scriptedCls == null || (scriptedCls = Type.resolveClass(scriptedCls + "_HSX")) == null) {
 					error(EInvalidClass(extend));
 					return null;
 				}
 				return UnsafeReflect.field(scriptedCls, "__hsx_init")(cl, this, args);
-			// }
-			// catch(e)
-			// {
-			// 	trace("    " + e);
-			// 	trace("    " + e.details());
-			// 	return null;
-			// }
+				// }
+				// catch(e)
+				// {
+				// 	trace("    " + e);
+				// 	trace("    " + e.details());
+				// 	return null;
+				// }
 
 			default:
 				var c:Dynamic = resolve(cl, false, false);

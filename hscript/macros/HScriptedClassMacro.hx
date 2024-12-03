@@ -20,7 +20,6 @@ class HScriptedClassMacro
 	 */
 	public static macro function build():Array<Field>
 	{
-		#if !display
 		if (Context.defined("display")) return null;
 		var cls:ClassType = Context.getLocalClass().get();
 
@@ -46,7 +45,6 @@ class HScriptedClassMacro
 		{
 			// Already processed.
 		}
-		#end
 
 		// Returning null is equal to "don't do anything".
 		return null;

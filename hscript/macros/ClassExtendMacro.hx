@@ -23,21 +23,17 @@ class ClassExtendMacro {
 	public static var modifiedClasses:Array<String> = [];
 
 	public static function init():Void {
-		#if !display
-		#if CUSTOM_CLASSES
-		if(Context.defined("display")) return;
+		if(Context.defined("display") || !Context.defined("CUSTOM_CLASSES")) return;
 		for(apply in Config.ALLOWED_CUSTOM_CLASSES) {
 			Compiler.addGlobalMetadata(apply, "@:build(hscript.macros.ClassExtendMacro.build())");
 		}
-		#end
-		#end
 	}
 
 	// TODO: Allows to extend a class with parameters.
 	public static function build():Array<Field> {
 		var fields:Array<Field> = Context.getBuildFields();
-		var clRef:Null<haxe.macro.Type.Ref<ClassType>> = Context.getLocalClass();
-		if (clRef == null || fields.length == 0) return fields;
+		var clRef:Null<Ref<ClassType>> = Context.getLocalClass();
+		if (clRef == null || fields.length == 0) return null;
 		var cl:ClassType = clRef.get();
 
 		if (
@@ -45,25 +41,25 @@ class ClassExtendMacro {
 			|| cl.name.endsWith("_Impl_") || cl.name.endsWith("_HSC")
 			|| cl.name.endsWith(CLASS_SUFFIX)
 		)
-			return fields;
+			return null;
 
 		if(cl.params.length > 0) // TODO
 		{
 			// trace(cl.module + "." + cl.name);
 			// trace(cl.params);
-			return fields;
+			return null;
 		}
 
 		for(m in cl.meta.get())
 			if (unallowedMetas.contains(m.name))
-				return fields;
+				return null;
 
 		var key:String = cl.module;
 		var fkey:String = cl.module + "." + cl.name;
 
 		for (i in Config.DISALLOW_CUSTOM_CLASSES)
 			if(fkey.startsWith(i) || key.startsWith(i))
-				return fields;
+				return null;
 
 		var _tempCl:ClassType = cl;
 		var isStaticModule:Bool = _tempCl.init == null && fields.filter(i -> return (i.access.contains(AStatic) || i.access.contains(AMacro))).length == 0;
@@ -75,7 +71,7 @@ class ClassExtendMacro {
 		}
 		if(isStaticModule) // doesn't compile static module or class with only staticfields
 		{
-			return fields;
+			return null;
 		}
 
 		var shadowClass:TypeDefinition = macro class { };
@@ -114,10 +110,6 @@ class ClassExtendMacro {
 		// trace(" " + fkey);
 		Context.defineModule(cl.module, [shadowClass], imports);
 
-		// trace(shadowClass.pack.join(".") + "." + shadowClass.name);
-		// trace(cl.module + "." + shadowClass.name);
-		// Compiler.addGlobalMetadata(cl.module + "." + shadowClass.name, "@:autoBuil(hscript.custom_classes.HScriptedClassMacro.build())");
-
 		/*
 		var p = new Printer();
 		var aa = p.printTypeDefinition(shadowClass);
@@ -125,7 +117,7 @@ class ClassExtendMacro {
 		trace(aa);
 		if(aa.indexOf("pack") >= 0)
 		*/
-		return fields;
+		return null;
 	}
 	#end
 }

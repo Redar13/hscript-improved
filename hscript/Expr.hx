@@ -264,7 +264,7 @@ class Argument {
 	}
 
 	public function toString() {
-		return (opt ? "?" : "") + name + (t != null ? ":" + Printer.convertTypeToString(t) : "") + (value != null ? "=" + Printer.convertExprToString(value) : "");
+		return (opt ? "?" : "") + name + (t != null ? ":" + Printer.convertTypeToString(t) : "") + (value != null ? " = " + Printer.convertExprToString(value) : "");
 	}
 }
 

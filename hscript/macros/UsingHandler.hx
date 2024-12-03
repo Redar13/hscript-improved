@@ -12,18 +12,16 @@ using StringTools;
 
 class UsingHandler {
 	public static function init() {
-		#if !display
 		if(Context.defined("display")) return;
 		for(apply in Config.ALLOWED_ABSTRACT_AND_ENUM) {
 			Compiler.addGlobalMetadata(apply, '@:build(hscript.macros.UsingHandler.build())');
 		}
-		#end
 	}
 
 	public static function build():Array<Field> {
 		var fields = Context.getBuildFields();
 		var clRef = Context.getLocalClass();
-		if (clRef == null) return fields;
+		if (clRef == null) return null;
 		var cl = clRef.get();
 
 		if (cl.name.endsWith("_Impl_") && cl.params.length <= 0 && !cl.meta.has(":multiType") && !cl.name.contains("_HSC")) {
@@ -31,7 +29,7 @@ class UsingHandler {
 
 			var key = cl.module;
 			var fkey = key + "." + trimEnum;
-			if(key.contains("_")) return fields; // Weird issue, sorry
+			if(key.contains("_")) return null; // Weird issue, sorry
 			switch (key)
 			{
 				case "lime.system.Locale" // Error: Unknown identifier : currentLocale, Due to Func
@@ -41,11 +39,11 @@ class UsingHandler {
 					| "cpp.Callable" // Error: cpp.Function.fromStaticFunction must be called on static function, Due to Func
 					| "haxe.display.JsonAnonStatusKind" // Error: cannot initialize a variable of type 'char *' with an rvalue of type 'const char *', Due to Func
 					| "cpp.CharStar": // Error: cannot initialize a variable of type 'char *' with an rvalue of type 'const char *', Due to Func
-						return fields;
+						return null;
 			}
 			for (i in Config.DISALLOW_ABSTRACT_AND_ENUM)
 				if(fkey.startsWith(i) || key.startsWith(i))
-					return fields;
+					return null;
 
 			var shadowClass = macro class { };
 			shadowClass.kind = TDClass();
@@ -170,7 +168,7 @@ class UsingHandler {
 			Context.defineModule(cl.module, [shadowClass], imports);
 		}
 
-		return fields;
+		return null;
 	}
 }
 #end
