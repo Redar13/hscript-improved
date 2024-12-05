@@ -216,6 +216,7 @@ class Interp {
 
 	public var usingEnabled:Bool = true;
 	public var importEnabled:Bool = true;
+	public var autoConvertOptArgs:Bool = false;
 
 	public var allowStaticVariables:Bool = false;
 	public var allowPublicVariables:Bool = false;
@@ -1295,13 +1296,12 @@ class Interp {
 					if (e != null && e.depth > 0)
 						capturedLocals.set(k, e);
 
-				var me:Interp = this;
 				// var hasOpt:Bool = false;
 				var minParams:Int = 0;
 				for (p in params) {
 					if (p.opt) {
 						// hasOpt = true;
-						if (p.value == null) {
+						if (p.value == null && autoConvertOptArgs) {
 							p.value = switch (p.t) {
 								case CTPath([type], null):
 									switch(type)
@@ -1319,6 +1319,7 @@ class Interp {
 					}
 				}
 
+				var me:Interp = this;
 				// ?TODO: Buffer of functions
 				var f = UnsafeReflect.makeVarArgs(function(args:Array<Dynamic>) {
 					if (me.locals == null || me.variables == null)
@@ -1351,9 +1352,11 @@ class Interp {
 					me.depth++;
 					me.locals = me.duplicate(capturedLocals);
 					for (i in 0...params.length)
-						me.locals.set(params[i].name, {r: args[i], depth: depth});
+					{
+						me.locals.set(params[i].name, {r: args[i], depth: me.depth});
+					}
 					var r:Null<Dynamic> = null;
-					var oldDecl:Int = declared.length;
+					var oldDecl:Int = me.declared.length;
 					if (inTry)
 						try {
 							r = castExprByType(me.exprReturn(fexpr), type);
@@ -1387,7 +1390,7 @@ class Interp {
 						}
 					} else {
 						// function-in-function is a local function
-						declared.push({n: name, old: locals.get(name), depth: depth});
+						me.declared.push({n: name, old: locals.get(name), depth: depth});
 						var ref:DeclaredVar = {r: f, depth: depth};
 						locals.set(name, ref);
 						capturedLocals.set(name, ref); // allow self-recursion
