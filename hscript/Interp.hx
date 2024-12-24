@@ -94,8 +94,8 @@ private enum Stop {
 class Interp {
 	public var scriptObject(default, set):Dynamic;
 
-	private var _hasScriptObject(default, null):Bool = false;
-	private var _scriptObjectType(default, null):ScriptObjectType = SNull;
+	private var _hasScriptObject(default, null):Bool;
+	private var _scriptObjectType(default, null):ScriptObjectType;
 
 	function set_scriptObject(v:Dynamic) {
 		switch (Type.typeof(v)) {
@@ -181,7 +181,6 @@ class Interp {
 			allowTypes = parentInterp.allowTypes;
 			usingEnabled = parentInterp.usingEnabled;
 			#if hscriptPos
-			var me = this;
 			variables.set("trace", UnsafeReflect.makeVarArgs(function(el) {
 				var oldExpr = parentInterp.curExpr;
 				var curExpr = me.curExpr;
@@ -211,12 +210,12 @@ class Interp {
 	var inTry:Bool;
 	var declared:Array<RedeclaredVar>;
 	var returnValue:Dynamic;
+	var me(default, null):Interp;
 
 	var isBypassAccessor:Bool = false;
 
 	public var usingEnabled:Bool = true;
 	public var importEnabled:Bool = true;
-	public var autoConvertOptArgs:Bool = false;
 
 	public var allowStaticVariables:Bool = false;
 	public var allowPublicVariables:Bool = false;
@@ -227,7 +226,7 @@ class Interp {
 	];
 
 	var __staticId:String;
-	var __instanceFields:Array<String> = [];
+	var __instanceFields:Array<String>;
 	#if hscriptPos
 	var curExpr:Expr;
 	#end
@@ -235,11 +234,11 @@ class Interp {
 	var _proxy:PolymodAbstractScriptClass = null;
 
 	public function new(?targetObj:Dynamic) {
+		me = this;
 		locals = new Map();
 		declared = new Array();
 		resetVariables();
-		if (targetObj == null)
-			scriptObject = targetObj;
+		scriptObject = targetObj;
 	}
 
 	private function resetVariables() {
@@ -620,7 +619,6 @@ class Interp {
 	}
 
 	function assignOp(op, fop:Dynamic->Dynamic->Dynamic) {
-		var me = this;
 		binops.set(op, function(e1, e2) return me.evalAssignOp(fop, e1, e2));
 	}
 
@@ -1301,31 +1299,18 @@ class Interp {
 				for (p in params) {
 					if (p.opt) {
 						// hasOpt = true;
-						if (p.value == null && autoConvertOptArgs) {
-							p.value = switch (p.t) {
-								case CTPath([type], null):
-									switch(type)
-									{
-										case "Int": mk(EConst(CInt(0)));
-										case "Float": mk(EConst(CFloat(0)));
-										case "Bool": mk(EIdent("false"));
-										default: null;
-									}
-								default: null;
-							}
-						}
 					} else {
 						minParams++;
 					}
 				}
 
-				var me:Interp = this;
 				// ?TODO: Buffer of functions
 				var f = UnsafeReflect.makeVarArgs(function(args:Array<Dynamic>) {
 					if (me.locals == null || me.variables == null)
 						return null;
 
-					if ((args == null ? 0 : args.length) != params.length) {
+					if (args == null) args = [];
+					if (args.length != params.length) {
 						if (args.length < minParams) {
 							var str:String = "Invalid number of parameters. Got " + args.length + ", required " + minParams;
 							if (name != null)
@@ -1333,6 +1318,7 @@ class Interp {
 							error(ECustom(str));
 						}
 						// make sure mandatory args are forced
+						if (args.length < params.length) args.resize(params.length);
 						var extraParams:Int = args.length - minParams;
 						var pos:Int = 0;
 						for (i => p in params) {
@@ -1348,7 +1334,7 @@ class Interp {
 							}
 						}
 					}
-					var old = me.locals, depth = me.depth;
+					var oldLocals = me.locals, oldDepth = me.depth;
 					me.depth++;
 					me.locals = me.duplicate(capturedLocals);
 					for (i in 0...params.length)
@@ -1362,8 +1348,8 @@ class Interp {
 							r = castExprByType(me.exprReturn(fexpr), type);
 						} catch (e:Dynamic) {
 							restore(oldDecl);
-							me.locals = old;
-							me.depth = depth;
+							me.locals = oldLocals;
+							me.depth = oldDepth;
 							#if neko
 							neko.Lib.rethrow(e);
 							#else
@@ -1373,8 +1359,8 @@ class Interp {
 					else
 						r = castExprByType(me.exprReturn(fexpr), type);
 					restore(oldDecl);
-					me.locals = old;
-					me.depth = depth;
+					me.locals = oldLocals;
+					me.depth = oldDepth;
 					return r;
 				});
 				if (name != null) {

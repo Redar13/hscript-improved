@@ -18,7 +18,7 @@ class ClassExtendMacro {
 	public static final CLASS_SUFFIX:String = "_HSX";
 
 	#if macro
-	public static var unallowedMetas:Array<String> = ["hscriptClassPreProcessed", ":structInit", ":bitmap", ":noCustomClass", ":generic", ":hscriptClass"];
+	public static var unallowedMetas:Array<String> = ["hscriptClassPreProcessed", ":structInit", ":bitmap", ":noCustomClass", ":generic", ":hscriptClass", ":nullSafety"];
 
 	public static var modifiedClasses:Array<String> = [];
 
