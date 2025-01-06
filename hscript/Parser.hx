@@ -60,6 +60,7 @@ enum Token {
 	TPrepro( s : String );
 }
 
+@:analyzer(optimize, local_dce, fusion, user_var_fusion)
 class Parser {
 
 	// config / variables
@@ -1195,25 +1196,49 @@ class Parser {
 				var tk = token();
 				push(tk);
 				var e = if( tk == TSemicolon ) null else parseExpr();
-				mk(EReturn(e),p1,if( e == null ) tokenMax else pmax(e));
+				mk(EReturn(e), p1, if( e == null ) tokenMax else pmax(e));
 			case "new":
-				var a = new Array();
+				var clParams:Array<CType> = null;
+				var a:Array<String> = new Array();
 				a.push(getIdent());
+				var t;
 				while( true ) {
-					switch( token() ) {
+					switch( t = token() ) {
 						case TDot:
 							a.push(getIdent());
 						case TPOpen:
 							break;
+						case TOp("<") if (clParams == null):
+							clParams = [];
+							while( true ) {
+								clParams.push(parseType());
+								t = token();
+								switch( t ) {
+									case TComma: continue;
+									case TOp(op):
+										if( op == ">" ) break;
+										if( op.charCodeAt(0) == ">".code ) {
+											#if hscriptPos
+											tokens.add({ t : TOp(op.substr(1)), min : tokenMax - op.length - 1, max :tokenMax });
+											#else
+											tokens.add(TOp(op.substr(1)));
+											#end
+											break;
+										}
+									default:
+								}
+								unexpected(t);
+								break;
+							}
 						case tk:
 							unexpected(tk);
 							break;
 					}
 				}
-				mk(ENew(a.join("."), parseExprList(TPClose)), p1);
+				mk(ENew(a.join("."), parseExprList(TPClose), clParams), p1);
 			case "throw":
 				var e = parseExpr();
-				mk(EThrow(e),p1,pmax(e));
+				mk(EThrow(e), p1, pmax(e));
 			case "try":
 				var e = parseExpr();
 				ensureToken(TId("catch"));

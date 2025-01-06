@@ -91,6 +91,7 @@ private enum Stop {
 }
 
 @:access(hscript.HScriptedClass)
+@:analyzer(optimize, local_dce, fusion, user_var_fusion)
 class Interp {
 	public var scriptObject(default, set):Dynamic;
 
@@ -228,6 +229,7 @@ class Interp {
 	var __staticId:String;
 	var __instanceFields:Array<String>;
 	#if hscriptPos
+	var lastCalledMethod:String;
 	var curExpr:Expr;
 	#end
 
@@ -263,9 +265,19 @@ class Interp {
 	public function posInfos():PosInfos {
 		#if hscriptPos
 		if (curExpr != null)
-			return cast {fileName: curExpr.origin, lineNumber: curExpr.line};
+			return {
+				fileName: curExpr.origin,
+				className: curExpr.origin,
+				lineNumber: curExpr.line,
+				methodName: lastCalledMethod
+			}
 		#end
-		return cast {fileName: "hscript", lineNumber: 0};
+		return {
+			fileName: "hscript",
+			className: "hscript",
+			lineNumber: 0,
+			methodName: ""
+		}
 	}
 
 	function castExprByType(expr:Dynamic, ?type:CType):Dynamic {
@@ -1221,7 +1233,7 @@ class Interp {
 							var maybeFunc = usingFunctions.get(f);
 							if (maybeFunc != null)
 							{
-								var args = [for (p in params) expr(p)];
+								var args:Array<Dynamic> = [for (p in params) expr(p)];
 								args.unshift(null);
 								return call(null, maybeFunc, args);
 							}
@@ -1308,6 +1320,10 @@ class Interp {
 				var f = UnsafeReflect.makeVarArgs(function(args:Array<Dynamic>) {
 					if (me.locals == null || me.variables == null)
 						return null;
+
+					#if hscriptPos
+					lastCalledMethod = name;
+					#end
 
 					if (args == null) args = [];
 					if (args.length != params.length) {
@@ -1413,8 +1429,8 @@ class Interp {
 				} else {
 					return arr[index];
 				}
-			case ENew(cl, params):
-				return cnew(cl, [for (e in params) expr(e)]);
+			case ENew(cl, params, clParams):
+				return cnew(cl, [for (e in params) expr(e)], clParams);
 			case EThrow(e):
 				throw expr(e);
 			case ETry(e, n, _, ecatch):
@@ -1842,7 +1858,7 @@ class Interp {
 			return cl;
 	}
 
-	function cnew(cl:String, args:Array<Dynamic>):Dynamic {
+	function cnew(cl:String, args:Array<Dynamic>, ?clArgs:Array<Dynamic>):Dynamic {
 		switch (getCustomClass(cl)) {
 			case EClass(_, fields, extend, interfaces):
 				// try

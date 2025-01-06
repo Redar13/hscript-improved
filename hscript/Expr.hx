@@ -69,7 +69,7 @@ enum Expr {
 	EReturn( ?e : Expr ); // function() { return 0; }
 	EArray( e : Expr, index : Expr ); // myArray[0]
 	EArrayDecl( e : Array<Expr>, ?wantedType: CType ); // [1, 2, 3, 4, 5]
-	ENew( cl : String, params : Array<Expr> ); // new MyClass(5, 8)
+	ENew( cl : String, params : Array<Expr>, ?clParams: Array<CType> ); // new MyClass<FlxSprite>(5, 8)
 	EThrow( e : Expr ); // throw "Err";
 	ETry( e : Expr, v : String, t : Null<CType>, ecatch : Expr ); // try { expr } catch(e) { expr }
 	EObject( fl : Array<{ name : String, e : Expr }> ); // { a: 5, b: 7, c: 4}
