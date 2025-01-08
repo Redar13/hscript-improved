@@ -382,22 +382,23 @@ enum abstract EFieldAccess(UInt16) from UInt16 to UInt16 {
 	}
 
 	public static function toStringExtr(acc:EFieldAccess, ?allowFinal:Bool):String {
-		var res = "";
+		var res:StringBuf = new StringBuf();
 		if (allowFinal && acc.isFinal)
-			res += " final";
+			res.add(" final");
 		if (acc.isPublic)
-			res += " public";
+			res.add(" public");
 		// else
-		// 	res += " private";
+		// 	res.add(" private");
 		if (acc.isOverride)
-			res += " override";
+			res.add(" override");
 		else if (acc.isStatic)
-			res += " static";
+			res.add(" static");
 		if (acc.isMacro)
-			res += " macro";
+			res.add(" macro");
 		if (acc.isInline)
-			res += " inline";
-		return res.length > 0 ? res.substr(1) : res;
+			res.add(" inline");
+		var str:String = res.toString();
+		return str.length > 1 ? str.substr(1) : str;
 	}
 
 	public function toString():String {

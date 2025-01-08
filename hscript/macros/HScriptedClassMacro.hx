@@ -11,8 +11,6 @@ using haxe.macro.TypeTools;
 
 class HScriptedClassMacro
 {
-	static var secondaryPassInitialized:Bool = false;
-
 	/**
 	 * The first step creates the interface functions.
 	 * The second build step (called in an onAfterTyping callback) creates the rest of the functions,
@@ -454,7 +452,7 @@ class HScriptedClassMacro
 
 	static function getBaseParamsOfType(parentType:Type, paramTypes:Array<Type>):Array<TypeParameter>
 	{
-		var parentParams:Array<TypeParameter> = [];
+		var parentParams:Array<TypeParameter> = null;
 
 		switch (parentType)
 		{
@@ -490,13 +488,16 @@ class HScriptedClassMacro
 
 		var result:Array<TypeParameter> = [];
 
-		for (i => parentParam in parentParams)
+		if (parentParams != null)
 		{
-			var newParam:TypeParameter = {
-				name: parentParam.name,
-				t: paramTypes[i],
-			};
-			result.push(newParam);
+			for (i => parentParam in parentParams)
+			{
+				var newParam:TypeParameter = {
+					name: parentParam.name,
+					t: paramTypes[i],
+				};
+				result.push(newParam);
+			}
 		}
 
 		return result;

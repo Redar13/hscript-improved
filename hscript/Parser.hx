@@ -38,26 +38,26 @@ typedef StoredToken = Token;
 typedef TokenList = List<StoredToken>;
 
 enum Token {
-	TEof;
-	TConst( c : Const );
-	TInterpString( tkl: Array<TokenList> ); // Stores the tokens that make up the interpolation string
-	TRegex( r: String, opt: String );
-	TId( s : String );
-	TOp( s : String );
-	TPOpen;
-	TPClose;
-	TBrOpen;
-	TBrClose;
-	TDot;
-	TQuestionDot;
-	TComma;
-	TSemicolon;
-	TBkOpen;
-	TBkClose;
-	TQuestion;
-	TDoubleDot;
-	TMeta( s : String );
-	TPrepro( s : String );
+	TEof; // <eof>
+	TConst( c : Const ); // 1.0 | 5 | "World"
+	TInterpString( tkl: Array<TokenList> ); // 'Hello ${word}'
+	TRegex( r: String, opt: String ); // ~/r/opt
+	TId( s : String ); // myVar
+	TOp( s : String ); // is | == | ...
+	TPOpen; // (
+	TPClose; // )
+	TBrOpen; // {
+	TBrClose; // }
+	TDot; // .
+	TQuestionDot; // ?.
+	TComma; // ,
+	TSemicolon; // ;
+	TBkOpen; // [
+	TBkClose; // ]
+	TQuestion; // ?
+	TDoubleDot; // :
+	TMeta( s : String ); // @:MyMeta
+	TPrepro( s : String ); // #if
 }
 
 @:analyzer(optimize, local_dce, fusion, user_var_fusion)
@@ -102,8 +102,6 @@ class Parser {
 		resume from parsing errors (when parsing incomplete code, during completion for example)
 	**/
 	public var resumeErrors : Bool;
-
-	public var allowStringInterpolation:Bool = true;
 
 	// implementation
 	var input : String;
@@ -158,8 +156,12 @@ class Parser {
 				opPriority.set(x, i);
 				if( i == 9 ) opRightAssoc.set(x, true);
 			}
-		for( x in ["!", "++", "--", "~"] ) // unary "-" handled in parser directly!
-			opPriority.set(x, x == "++" || x == "--" ? -1 : -2);
+
+		// unary "-" handled in parser directly!
+		opPriority.set("!", -2);
+		opPriority.set("++", -1);
+		opPriority.set("--", -1);
+		opPriority.set("~", -2);
 	}
 
 	public inline function error( err, pmin, pmax ) {
@@ -204,8 +206,9 @@ class Parser {
 		input = s;
 		readPos = 0;
 		var a:Array<Expr> = new Array();
+		var tk:Token;
 		while( true ) {
-			var tk:Token = token();
+			tk = token();
 			if( tk == TEof ) break;
 			push(tk);
 			parseFullExpr(a);
@@ -609,84 +612,6 @@ class Parser {
 				return unexpected(tk);
 		}
 	}
-
-	function parseRegex():Expr
-	{
-		var char:Int = 0;
-		var expresion:String = "";
-		var flags:String = "";
-		var nextIsFlags = false;
-
-		var old = line;
-
-		#if hscriptPos
-		var p1 = tokenMin;
-		#end
-
-		while (true)
-		{
-			if (this.char < 0)
-				char = readChar();
-			else
-			{
-				char = this.char;
-				this.char = -1;
-			}
-
-			if (StringTools.isEof(char))
-			{
-				line = old;
-				error(EUnterminatedString, p1, p1);
-				break;
-			}
-
-			if (char == '/'.code)
-			{
-				if (nextIsFlags)
-				{
-					line = old;
-					error(EUnterminatedString, p1, p1);
-					break;
-				}
-				nextIsFlags = true;
-			}
-			else
-			{
-				if (char == '\n'.code)
-					line++;
-
-				if (!nextIsFlags)
-				{
-					expresion += String.fromCharCode(char);
-					if (char == "\\".code)
-					{
-						var char = readChar();
-						if (StringTools.isEof(char))
-						{
-							line = old;
-							error(EUnterminatedString, p1, p1);
-						}
-						expresion += String.fromCharCode(char);
-					}
-				}
-				else
-				{
-					if (char == "i".code || char == "g".code || char == "s".code || char == "u".code || char == "m".code) // all valid ereg flags
-					{
-						flags += String.fromCharCode(char);
-					}
-					else
-					{
-						readPos--;
-						break;
-					}
-				}
-			}
-		}
-		// trace(expresion, flags);
-		return mk(ENew("EReg", [mk(EConst(CString(expresion))), mk(EConst(CString(flags)))]));
-	}
-
 	function parseLambda( args : Array<Argument>, pmin:Int ) {
 		var id;
 		var t;
@@ -1208,7 +1133,12 @@ class Parser {
 							a.push(getIdent());
 						case TPOpen:
 							break;
-						case TOp("<") if (clParams == null):
+						case TOp("<"):
+							if (clParams != null)
+							{
+								unexpected(t);
+								break;
+							}
 							clParams = [];
 							while( true ) {
 								clParams.push(parseType());

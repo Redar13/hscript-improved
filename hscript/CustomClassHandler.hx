@@ -1,10 +1,10 @@
 package hscript;
 
+/*
 import hscript.Interp.DeclaredVar;
 import hscript.UnsafeReflect;
 
 using StringTools;
-/*
 class CustomClassHandler implements IHScriptCustomConstructor {
 	public static var staticHandler = new StaticHandler();
 

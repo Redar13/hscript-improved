@@ -22,6 +22,7 @@ class ClassTools
 		[for (i in cast (Meta.getType(ClassTools).typedefDefines, Array<Dynamic>)) i[0] => i[1]];
 	#end
 
+	#if macro
 	static function getModulePath(t:BaseType):String
 		return t.pack.length > 0 ? '${t.pack.join(".")}.${t.name}' : t.name;
 
@@ -30,7 +31,7 @@ class ClassTools
 	;
 	public static function init()
 	{
-		#if (!display && macro)
+		#if !display
 		function onGenerate(t:Type)
 		{
 			switch t
@@ -87,4 +88,5 @@ class ClassTools
 		});
 		#end
 	}
+	#end
 }
