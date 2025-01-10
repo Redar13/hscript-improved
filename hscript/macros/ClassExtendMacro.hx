@@ -62,7 +62,7 @@ class ClassExtendMacro {
 				return null;
 
 		var _tempCl:ClassType = cl;
-		var isStaticModule:Bool = _tempCl.init == null && fields.filter(i -> return (i.access.contains(AStatic) || i.access.contains(AMacro))).length == 0;
+		var isStaticModule:Bool = _tempCl.init == null && fields.filter(i -> return i.access.contains(AStatic) || i.access.contains(AMacro)).length == 0;
 		// var isStaticModule:Bool = _tempCl.init == null && _tempCl.fields.get()length == 0;
 		while (isStaticModule && _tempCl.superClass != null)
 		{
