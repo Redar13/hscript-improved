@@ -35,6 +35,7 @@ class PolymodScriptClass
 	public var extend:String;
 	public var cl:Class<Dynamic>; // class referense
 	public var fields:Array<Expr>;
+	var _allowSetGet:Bool = true;
 	/**
 	 * INSTANCE METHODS
 	 */
@@ -173,11 +174,13 @@ class PolymodScriptClass
 		if (func == null && superClass != null)
 		{
 			// if (args != null)
+			// {
 			// 	for (i => a in args)
 			// 	{
 			// 		if (Std.isOfType(a, PolymodScriptClass))
 			// 			args[i] = cast(a, PolymodScriptClass).superClass;
 			// 	}
+			// }
 			_nextFromSuper = true;
 			func = UnsafeReflect.field(superClass, fnName);
 		}
@@ -489,7 +492,7 @@ class PolymodScriptClass
 			} else {
 				return UnsafeReflect.getProperty(superClass, name);
 			}
-		} else if (superHasField('get_$name')) { // getter
+		} else if (_allowSetGet && superHasField('get_$name')) { // getter
 			return UnsafeReflect.getProperty(superClass, 'get_$name')();
 		}
 		return null;
@@ -501,7 +504,7 @@ class PolymodScriptClass
 			UnsafeReflect.setProperty(superClass, name, value);
 			return value;
 		}
-		else if (superHasField('set_$name'))
+		else if (_allowSetGet && superHasField('set_$name'))
 		{
 			return UnsafeReflect.field(superClass, 'set_$name')(value);
 		}

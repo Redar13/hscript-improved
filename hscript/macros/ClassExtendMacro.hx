@@ -32,8 +32,9 @@ class ClassExtendMacro {
 	// TODO: Allows to extend a class with parameters.
 	public static function build():Array<Field> {
 		var fields:Array<Field> = Context.getBuildFields();
+		if (fields.length == 0) return null;
 		var clRef:Null<Ref<ClassType>> = Context.getLocalClass();
-		if (clRef == null || fields.length == 0) return null;
+		if (clRef == null) return null;
 		var cl:ClassType = clRef.get();
 
 		if (

@@ -21,31 +21,25 @@ class HScriptedClassMacro
 		if (Context.defined("display")) return null;
 		var cls:ClassType = Context.getLocalClass().get();
 
-		if (cls.meta.get().find(m -> return m.name == 'hscriptClassPreProcessed') == null)
-		{
-			// Context.info('HScriptedClass: Class ' + cls.name + ' ready to pre-process...', Context.currentPos());
-			var fields:Array<Field> = Context.getBuildFields().copy();
-
-			// trace('    ${cls.name}');
-			for (i in buildScriptedClassUtils(cls))
-				fields.push(i);
-
-			fields = buildHScriptClass(cls, fields);
-
-			// Ensure unused scripted classes are still available to initialize in scripts.
-			// SORRY, DCE gets run before this, so we can't use the @:keep metadata.
-			cls.meta.add("hscriptClassPreProcessed", [], cls.pos);
-			// trace('  ${cls.name}');
-			// trace('  ${[for (i in fields) i.name]}');
-			return fields;
-		}
-		else
-		{
+		if (cls.meta.get().find(m -> return m.name == 'hscriptClassPreProcessed') != null)
 			// Already processed.
-		}
+			return null;
 
-		// Returning null is equal to "don't do anything".
-		return null;
+		// Context.info('HScriptedClass: Class ' + cls.name + ' ready to pre-process...', Context.currentPos());
+		var fields:Array<Field> = Context.getBuildFields().copy();
+
+		// trace('    ${cls.name}');
+		for (i in buildScriptedClassUtils(cls))
+			fields.push(i);
+
+		fields = buildHScriptClass(cls, fields);
+
+		// Ensure unused scripted classes are still available to initialize in scripts.
+		// SORRY, DCE gets run before this, so we can't use the @:keep metadata.
+		cls.meta.add("hscriptClassPreProcessed", [], cls.pos);
+		// trace('  ${cls.name}');
+		// trace('  ${[for (i in fields) i.name]}');
+		return fields;
 	}
 
 	/**
@@ -87,7 +81,6 @@ class HScriptedClassMacro
 	 */
 	public static function buildHScriptClass(cls:ClassType, fields:Array<Field>):Array<Field>
 	{
-
 		// var cls:ClassType = Context.getLocalClass().get();
 
 		var script_class_meta = cls.meta.get().find(function(m) return m.name == ':hscriptClass');
@@ -117,7 +110,7 @@ class HScriptedClassMacro
 							// 	for (arg in args)
 							// 		{name: arg.name, opt: arg.opt, type: Context.toComplexType(arg.t)}
 							// ];
-							var initField:Field = buildScriptedClassInit(cls, superCls, []);
+							var initField:Field = buildScriptedClassInit(cls, superCls);
 							fields.push(initField);
 							// constructor = buildScriptedClassConstructor(constArgs);
 						case TLazy(builder):
@@ -129,7 +122,7 @@ class HScriptedClassMacro
 									// 	for (arg in args)
 									// 		{name: arg.name, opt: arg.opt, type: Context.toComplexType(arg.t)}
 									// ];
-									var initField:Field = buildScriptedClassInit(cls, superCls, []);
+									var initField:Field = buildScriptedClassInit(cls, superCls);
 									fields.push(initField);
 									// constructor = buildScriptedClassConstructor(constArgs);
 								case builtValue:
@@ -144,7 +137,7 @@ class HScriptedClassMacro
 					constructor = buildEmptyScriptedClassConstructor();
 					// Create scripted class utility functions.
 					// Context.info('  Creating scripted class utils...', Context.currentPos());
-					var initField:Field = buildScriptedClassInit(cls, superCls, []);
+					var initField:Field = buildScriptedClassInit(cls, superCls);
 					fields.push(initField);
 					fields.push(constructor);
 				}
@@ -154,7 +147,7 @@ class HScriptedClassMacro
 				constructor = buildEmptyScriptedClassConstructor();
 				// Create scripted class utility functions.
 				// Context.info('  Creating scripted class utils...', Context.currentPos());
-				var initField:Field = buildScriptedClassInit(cls, null, []);
+				var initField:Field = buildScriptedClassInit(cls, null);
 				fields.push(initField);
 				fields.push(constructor);
 			}
@@ -168,10 +161,10 @@ class HScriptedClassMacro
 		return fields;
 	}
 
-	static function buildScriptedClassInit(cls:ClassType, superCls:ClassType, superConstArgs:Array<FunctionArg>):Field
+	static function buildScriptedClassInit(cls:ClassType, superCls:ClassType):Field
 	{
 		var clsTypeName:String = cls.pack.join('.');
-		if (clsTypeName != "")
+		if (clsTypeName.length > 0)
 		{
 			clsTypeName += '.${cls.name}';
 		}
@@ -190,16 +183,16 @@ class HScriptedClassMacro
 			pos: cls.pos,
 			kind: FFun({
 				args: [
-					{name: 'clsName', type: Context.toComplexType(Context.getType('String'))},
-					{name: 'interp', type: Context.toComplexType(Context.getType('hscript.Interp'))},
-					{name: 'args', opt: true, type: Context.toComplexType(Context.getType('Array'))},
+					{name: 'clsName', type: resolveComplexType('String')},
+					{name: 'interp', type: resolveComplexType('hscript.Interp')},
+					{name: 'args', opt: true, type: resolveComplexType('Array')},
 				],
 				params: null,
-				ret: Context.toComplexType(Context.getType(clsTypeName)),
+				ret: resolveComplexType(clsTypeName),
 				expr: macro
 				{
 					// trace('  Init $clsName class');
-					var asc:hscript.custom_classes.PolymodAbstractScriptClass = hscript.custom_classes.PolymodScriptClass.createScriptClassInstance(clsName, interp, args);
+					final asc:hscript.custom_classes.PolymodAbstractScriptClass = hscript.custom_classes.PolymodScriptClass.createScriptClassInstance(clsName, interp, args);
 					if (asc == null)
 					{
 						// trace('  Failed init $clsName class');
@@ -222,9 +215,9 @@ class HScriptedClassMacro
 			meta: null,
 			pos: cls.pos,
 			kind: FFun({
-				args: [{name: 'varName', type: Context.toComplexType(Context.getType('String'))}],
+				args: [{name: 'varName', type: resolveComplexType('String')}],
 				params: null,
-				ret: Context.toComplexType(Context.getType('Dynamic')),
+				ret: resolveComplexType('Dynamic'),
 				expr: macro
 				{
 					return _asc.fieldRead(varName);
@@ -240,15 +233,15 @@ class HScriptedClassMacro
 			pos: cls.pos,
 			kind: FFun({
 				args: [
-					{name: 'varName', type: Context.toComplexType(Context.getType('String'))},
+					{name: 'varName', type: resolveComplexType('String')},
 					{
 						name: 'varValue',
-						type: Context.toComplexType(Context.getType('Dynamic')),
+						type: resolveComplexType('Dynamic'),
 						value: macro null,
 					}
 				],
 				params: null,
-				ret: Context.toComplexType(Context.getType('Dynamic')),
+				ret: resolveComplexType('Dynamic'),
 				expr: macro
 				{
 					return _asc.fieldWrite(varName, varValue);
@@ -264,15 +257,15 @@ class HScriptedClassMacro
 			pos: cls.pos,
 			kind: FFun({
 				args: [
-					{name: 'funcName', type: Context.toComplexType(Context.getType('String'))},
+					{name: 'funcName', type: resolveComplexType('String')},
 					{
 						name: 'funcArgs',
-						type: toComplexTypeArray(Context.toComplexType(Context.getType('Dynamic'))),
+						type: toComplexTypeArray(resolveComplexType('Dynamic')),
 						value: macro null,
 					}
 				],
 				params: null,
-				ret: Context.toComplexType(Context.getType('Dynamic')),
+				ret: resolveComplexType('Dynamic'),
 				expr: macro
 				{
 					return _asc.callFunction(funcName, funcArgs == null ? [] : funcArgs);
@@ -291,7 +284,7 @@ class HScriptedClassMacro
 			name: "_asc",
 			doc: "The AbstractScriptClass instance which any variable or function calls are redirected to internally.",
 			access: [APrivate], // Private instance variable
-			kind: FVar(Context.toComplexType(Context.getType('hscript.custom_classes.PolymodAbstractScriptClass'))),
+			kind: FVar(resolveComplexType('hscript.custom_classes.PolymodAbstractScriptClass')),
 			pos: cls.pos,
 		};
 		return [
@@ -310,8 +303,7 @@ class HScriptedClassMacro
 
 		var targetClass:ClassType = cls;
 		var mappedParams:Map<String, Type> = new Map<String, Type>();
-		var tType = Context.getType(cls.name);
-		var tClass = Context.toComplexType(tType);
+		// var tClass = resolveComplexType(cls.name);
 
 		// Start with a custom implementation of .toString()
 		var func_toString:Field = buildScriptedClass_toString(targetClass);
@@ -354,8 +346,7 @@ class HScriptedClassMacro
 				for (paramIndex in 0...targetClass.params.length)
 				{
 					var paramType = targetParams[paramIndex];
-					var paramName = targetClass.params[paramIndex].name;
-					var paramFullName = '${targetClass.pack.join('.')}.${targetClass.name}.${paramName}';
+					var paramFullName = '${targetClass.pack.join('.')}.${targetClass.name}.${targetClass.params[paramIndex].name}';
 					// trace(paramFullName, paramType);
 					mappedParams.set(paramFullName, paramType);
 				}
@@ -392,11 +383,13 @@ class HScriptedClassMacro
 			pos: cls.pos,
 			kind: FFun({
 				args: [],
-				ret: Context.toComplexType(Context.getType('String')),
+				ret: resolveComplexType('String'),
 				expr: macro
 				{
 					if (_asc == null || _asc._nextFromSuper)
 					{
+						if (_asc != null)
+							_asc._nextFromSuper = false;
 						$
 						{
 							if (oldToString == null)
@@ -423,23 +416,20 @@ class HScriptedClassMacro
 		// Values will be either of type haxe.macro.Expr.Field or Bool. This is because setting a Map value to null removes the key.
 		var fields:Map<String, Dynamic> = new Map<String, Dynamic>();
 
+		var resultField:Field;
 		for (field in cls.fields.get())
 		{
 			if (field.name == 'new')
+				continue; // Do nothing
+
+			resultField = overrideField(field, targetParams);
+			if (resultField == null)
 			{
-				// Do nothing
+				fields.set(field.name, false);
 			}
 			else
 			{
-				var resultField:Field = overrideField(field, targetParams);
-				if (resultField == null)
-				{
-					fields.set(field.name, false);
-				}
-				else
-				{
-					fields.set(resultField.name, resultField);
-				}
+				fields.set(resultField.name, resultField);
 			}
 		}
 		for (field in cls.statics.get())
@@ -794,7 +784,8 @@ class HScriptedClassMacro
 
 				// We only get limited information about the args from Type, we need to use TypedExprDef.
 
-				if (field == null || field.expr() == null)
+				var fieldExpr:Null<TypedExpr>;
+				if (field == null || (fieldExpr = field.expr()) == null)
 				{
 					// Context.info('  Skipping: "${field.name}" is not an expression', Context.currentPos());
 					return null;
@@ -812,7 +803,7 @@ class HScriptedClassMacro
 					func_access.push(APrivate);
 				}
 
-				switch (field.expr().expr)
+				switch (fieldExpr.expr)
 				{
 					case TFunction(tfunc):
 						// Create an array of FunctionArg from the TFunction's argument objects.
@@ -840,7 +831,7 @@ class HScriptedClassMacro
 
 						return null;
 					default:
-						Context.warning('Expected a function and got ${field.expr().expr}', Context.currentPos());
+						Context.warning('Expected a function and got ${fieldExpr.expr}', Context.currentPos());
 				}
 
 				// Is there a better way to do this?
@@ -886,6 +877,8 @@ class HScriptedClassMacro
 						{
 							if (_asc == null || _asc._nextFromSuper)
 							{
+								if (_asc != null)
+									_asc._nextFromSuper = false;
 								// Fallback, call the original function.
 								$
 								{
@@ -1006,6 +999,10 @@ class HScriptedClassMacro
 				}
 			})
 		};
+	}
+	static function resolveComplexType(path:String):haxe.macro.ComplexType
+	{
+		return Context.toComplexType(Context.getType(path));
 	}
 }
 
