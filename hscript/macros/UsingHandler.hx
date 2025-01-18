@@ -45,119 +45,95 @@ class UsingHandler {
 				if(fkey.startsWith(i) || key.startsWith(i))
 					return null;
 
+			// trace(cl.module, cl.name);
 			var shadowClass = macro class { };
 			shadowClass.kind = TDClass();
+			/*
 			shadowClass.params = switch(cl.params.length) {
 				case 0:
 					null;
-				/*
-				case 1:
-					[{
-						name: "T",
-					}];
-				*/
 				default:
 					[for(k=>e in cl.params) {
 						name: e.name
 					}];
 			}
+			*/
 			shadowClass.name = '${cl.name.substr(0, cl.name.length - 6)}_HSC';
 
-			var imports = Context.getLocalImports().copy();
+			var imports:Array<ImportExpr> = Context.getLocalImports().copy();
 			Utils.setupMetas(shadowClass, imports);
-			//trace(cl.module);
+			// var fullImplPath = cl.module;
 
 			for(f in fields)
 				switch(f.kind) {
 					case FFun(fun):
-						/*
-						if (f.access.contains(AMacro))
+						if (!f.access.contains(AStatic) || fun.expr == null)
 							continue;
-						for (i in fun.args)
-							if (i.type != null && i.type.match(TPath({name: "T"})))
-								i.type = TPath({name: "Dynamic", pack:[]});
-						*/
-						// if (fun.ret.match(TPath({name: "T"})))
-						// 	fun.ret = TPath({name: "Dynamic", pack:[]});
-						// fun.ret = null;
-						if (f.access.contains(AStatic))
+						fun.expr = macro @:privateAccess $e{fun.expr};
+						/*
+						// TODO: Don't create a clone of the main function, instead reference it directly if possible.
+						var func_callArgs:Array<Expr> = [for (arg in fun.args) macro $i{arg.name}];
+						var funcPath = fullImplPath + "." + f.name;
+						var funcExprs:Array<Expr> = fun.expr.expr.match(EBlock(_)) ? Type.enumParameters(fun.expr.expr)[0] : null;
+						if (
+							(funcExprs != null && funcExprs[funcExprs.length - 1].expr.match(EReturn(_)))
+							|| fun.expr.expr.match(EReturn(_))
+						)
 						{
-							if (fun.expr != null) {
-								fun.expr = macro @:privateAccess $e{fun.expr};
-
-								shadowClass.fields.push(f);
-
-								/*var trimEnum = cl.name.substr(0, cl.name.length - 6);
-
-								var returns:Bool = !fun.ret.match(TPath({name: "Void"}));
-
-								var name = f.name;
-
-								var arguments = fun.args == null ? [] : [for(a in fun.args) macro $i{a.name}];
-
-								var expr:Expr = Context.parse('${returns?"return " : ""} $trimEnum.$name(${[for(a in fun.args) a.name].join(", ")})', f.pos);
-
-								var func:Function = {
-									ret: fun.ret,
-									params: fun.params.copy(),
-									expr: expr,
-									args: fun.args.copy()
-								};
-
-								var field:Field = {
-									pos: f.pos,
-									name: f.name,
-									meta: f.meta,
-									kind: FFun(func),
-									doc: null,//f.doc,
-									access: [APublic, AStatic]
-								}
-								shadowClass.fields.push(field);*/
-							}
+							trace(funcPath);
+							fun.expr = macro return $i{funcPath}($a{func_callArgs});
 						}
+						else
+						{
+							fun.expr = macro $i{funcPath}($a{func_callArgs});
+						}
+						*/
+
+						shadowClass.fields.push(f);
+
 					case FProp(get, set, t, e):
 						if (get == "default" && (set == "never" || set == "null")) {
 							shadowClass.fields.push(f);
 						}
 					case FVar(t, e):
-						if (f.access.contains(AStatic) || cl.meta.has(":enum") || f.name.toUpperCase() == f.name) {
-							var name:String = f.name;
-							var enumType:String = cl.name;
-							var pack = cl.module.split(".");
+						if (!f.access.contains(AStatic) && !cl.meta.has(":enum") && f.name.toUpperCase() != f.name)
+							continue;
+						var name:String = f.name;
+						/*
+						var enumType:String = cl.name;
+						var pack = cl.module.split(".");
 
-							//trace(pack, cl.name, name, cl.module);
+						//trace(pack, cl.name, name, cl.module);
 
-							if(pack[pack.length - 1] == trimEnum)
-								pack.pop();
+						if(pack[pack.length - 1] == trimEnum)
+							pack.pop();
 
-							var complexType:ComplexType = t;
-							if(complexType == null && e != null) {
-								complexType = switch(e.expr) {
-									case EConst(CRegexp(_)): TPath({ name: "EReg", pack: [] });
+						var complexType:ComplexType = t;
+						if(complexType == null && e != null) {
+							complexType = switch(e.expr) {
+								case EConst(CRegexp(_)): TPath({ name: "EReg", pack: [] });
 
-									default: null;
-								}
+								default: null;
 							}
-							if(complexType == null) {
-								complexType = TPath({
-									name: trimEnum,
-									pack: [],//pack
-								});
-							}
-
-							var code = Context.parse('@:privateAccess ($trimEnum.$name)', f.pos); // '${pack.join(".")}.${trimEnum}.$name'
-
-							var field:Field = {
-								pos: f.pos,
-								name: f.name,
-								meta: f.meta,
-								kind: FVar(null, code),
-								doc: f.doc,
-								access: [APublic, AStatic]
-							}
-
-							shadowClass.fields.push(field);
 						}
+						if(complexType == null) {
+							complexType = TPath({
+								name: trimEnum,
+								pack: [],//pack
+							});
+						}
+						*/
+						var code = Context.parse('@:privateAccess ($trimEnum.$name)', f.pos); // '${pack.join(".")}.${trimEnum}.$name'
+						var field:Field = {
+							pos: f.pos,
+							name: f.name,
+							meta: f.meta,
+							kind: FVar(null, code),
+							doc: f.doc,
+							access: [APublic, AStatic]
+						}
+
+						shadowClass.fields.push(field);
 					default:
 				}
 
