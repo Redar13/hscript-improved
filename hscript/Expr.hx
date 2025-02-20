@@ -21,15 +21,15 @@
  */
 package hscript;
 
-typedef Int8 = #if cpp cpp.Int8 #elseif cs cs.Int8 #elseif java java.Int8 #else Int #end;
-typedef Int16 = #if cpp cpp.Int16 #elseif cs cs.Int16 #elseif java java.Int16 #else Int #end;
+typedef Byte = #if cpp cpp.Int8 #elseif cs cs.Int8 #elseif java java.Int8 #else Int #end;
+typedef Short = #if cpp cpp.Int16 #elseif cs cs.Int16 #elseif java java.Int16 #else Int #end;
 typedef Int32 = #if cpp cpp.Int32 #else Int #end;
-typedef Int64 = #if cpp cpp.Int64 #elseif cs cs.Int64 #elseif java java.Int64 #else Int #end;
+typedef Long = #if cpp cpp.Int64 #elseif cs cs.Int64 #elseif java java.Int64 #else Int #end;
 
-typedef UInt8 = #if cpp cpp.UInt8 #elseif cs cs.UInt8 #else Int #end;
-typedef UInt16 = #if cpp cpp.UInt16 #elseif cs cs.UInt16 #else Int #end;
+typedef UByte = #if cpp cpp.UInt8 #elseif cs cs.UInt8 #else Int #end;
+typedef UShort = #if cpp cpp.UInt16 #elseif cs cs.UInt16 #else Int #end;
 typedef UInt32 = #if cpp cpp.UInt32 #else Int #end;
-typedef UInt64 = #if cpp cpp.UInt64 #else Int #end;
+typedef ULong = #if cpp cpp.UInt64 #else Int #end;
 
 enum Const {
 	CInt( v : Int );
@@ -212,7 +212,7 @@ enum Binop {
 	OpNullCoal;
 }
 
-enum abstract Unop(UInt8) {
+enum abstract Unop(UByte) {
 	/**
 		`++`
 	**/
@@ -270,7 +270,7 @@ class Argument {
 
 typedef Metadata = Array<{ name : String, params : Array<Expr> }>;
 
-enum abstract EFieldAccess(UInt16) from UInt16 to UInt16 {
+enum abstract EFieldAccess(UShort) from UShort to UShort {
 	public function new(?isPublic:Bool, ?isInline:Bool, ?isOverride:Bool, ?isStatic:Bool, ?isFinal:Bool, ?isMacro:Bool) {
 		this = isPublic ? 1 : 0;
 		if (isInline) {
@@ -457,7 +457,7 @@ enum Error_ {
 	EInvalidEscape( s : String );
 }
 
-enum abstract ErrorMessage(Expr.UInt8) from Expr.UInt8 to Expr.UInt8 {
+enum abstract ErrorMessage(Expr.UByte) from Expr.UByte to Expr.UByte {
     final INVALID_CHAR_CODE_MULTI;
     final FROM_CHAR_CODE_NON_INT;
     final EMPTY_INTERPOLATION;
@@ -509,7 +509,7 @@ typedef FieldDecl = {
 	var access : Array<FieldAccess>;
 }
 
-enum abstract FieldAccess(UInt8) {
+enum abstract FieldAccess(UByte) {
 	var APublic;
 	var APrivate;
 	var AInline;

@@ -2,11 +2,12 @@ package hscript.macros;
 
 #if macro
 import Type.ValueType;
-import haxe.macro.ComplexTypeTools;
-import haxe.macro.Expr;
-import haxe.macro.Context;
-import haxe.macro.Printer;
 import haxe.macro.Compiler;
+import haxe.macro.ComplexTypeTools;
+import haxe.macro.Context;
+import haxe.macro.Expr;
+import haxe.macro.ExprTools;
+import haxe.macro.Printer;
 
 using StringTools;
 
@@ -45,7 +46,6 @@ class UsingHandler {
 				if(fkey.startsWith(i) || key.startsWith(i))
 					return null;
 
-			// trace(cl.module, cl.name);
 			var shadowClass = macro class { };
 			shadowClass.kind = TDClass();
 			/*
@@ -62,7 +62,6 @@ class UsingHandler {
 
 			var imports:Array<ImportExpr> = Context.getLocalImports().copy();
 			Utils.setupMetas(shadowClass, imports);
-			// var fullImplPath = cl.module;
 
 			for(f in fields)
 				switch(f.kind) {
@@ -70,15 +69,18 @@ class UsingHandler {
 						if (!f.access.contains(AStatic) || fun.expr == null)
 							continue;
 						fun.expr = macro @:privateAccess $e{fun.expr};
+
 						/*
 						// TODO: Don't create a clone of the main function, instead reference it directly if possible.
 						var func_callArgs:Array<Expr> = [for (arg in fun.args) macro $i{arg.name}];
-						var funcPath = fullImplPath + "." + f.name;
-						var funcExprs:Array<Expr> = fun.expr.expr.match(EBlock(_)) ? Type.enumParameters(fun.expr.expr)[0] : null;
-						if (
-							(funcExprs != null && funcExprs[funcExprs.length - 1].expr.match(EReturn(_)))
-							|| fun.expr.expr.match(EReturn(_))
-						)
+						var funcPath = cl.module + "." + f.name;
+						var haseReturn:Bool = fun.ret != null ? haxe.macro.ComplexTypeTools.toString(fun.ret) != "Void" : false;
+						ExprTools.iter(fun.expr, expr -> {
+							if (haseReturn) return;
+							// trace(haxe.macro.ExprTools.toString(expr));
+							haseReturn = expr.expr.match(EReturn(_)) && !expr.expr.match(EReturn(null));
+						});
+						if (haseReturn)
 						{
 							trace(funcPath);
 							fun.expr = macro return $i{funcPath}($a{func_callArgs});

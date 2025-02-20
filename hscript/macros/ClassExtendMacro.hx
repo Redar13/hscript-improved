@@ -33,10 +33,11 @@ class ClassExtendMacro {
 	public static function build():Array<Field> {
 		var fields:Array<Field> = Context.getBuildFields();
 		if (fields.length == 0) return null;
+
 		var clRef:Null<Ref<ClassType>> = Context.getLocalClass();
 		if (clRef == null) return null;
-		var cl:ClassType = clRef.get();
 
+		var cl:ClassType = clRef.get();
 		if (
 			cl.isAbstract || cl.isExtern || cl.isFinal || cl.isInterface
 			|| cl.name.endsWith("_Impl_") || cl.name.endsWith("_HSC")
@@ -63,6 +64,7 @@ class ClassExtendMacro {
 				return null;
 
 		var _tempCl:ClassType = cl;
+		// var isStaticModule:Bool = _tempCl.init == null && fields.filter(i -> return i.access.contains(AStatic) || i.access.contains(AMacro)).length != 0;
 		var isStaticModule:Bool = _tempCl.init == null && fields.filter(i -> return i.access.contains(AStatic) || i.access.contains(AMacro)).length == 0;
 		// var isStaticModule:Bool = _tempCl.init == null && _tempCl.fields.get()length == 0;
 		while (isStaticModule && _tempCl.superClass != null)

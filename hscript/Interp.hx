@@ -44,7 +44,7 @@ import hscript.macros.ClassTools;
 
 using StringTools;
 
-enum abstract ScriptObjectType(UInt8) {
+enum abstract ScriptObjectType(UByte) {
 	var SClass;
 	var SObject;
 	var SStaticClass;
@@ -146,8 +146,6 @@ class Interp {
 				__instanceFields = [];
 				_scriptObjectType = SNull;
 		}
-		// trace(_scriptObjectType);
-		// trace(__instanceFields);
 		_hasScriptObject = _scriptObjectType != SNull;
 		return scriptObject = v;
 	}
@@ -283,11 +281,11 @@ class Interp {
 	function castExprByType(expr:Dynamic, ?type:CType):Dynamic {
 		if (!allowTypes || type == null)
 			return expr;
-		// trace(type);
+
 		switch (type) {
 			case CTPath(t, paramas):
 				var strType = t[0];
-				switch (strType) {
+				switch (strType) { // TODO: Think of a better way
 					case "Array":
 						if (!Std.isOfType(expr, Array))
 							error(EUnexpected(strType));
@@ -314,7 +312,7 @@ class Interp {
 						return expr;
 					case "Null":
 						return expr == null || paramas == null || paramas.length == 0 ? null : castExprByType(expr, paramas[0]);
-					case("Map" | "IMap"):
+					case "Map" | "IMap":
 						if (!Std.isOfType(expr, IMap))
 							error(ECustom(strType));
 						return expr;
@@ -326,9 +324,8 @@ class Interp {
 						return expr;
 					default:
 						if (customClasses.exists(strType)) {
-							if (Std.isOfType(expr, HScriptedClass)) {
-								if (UnsafeReflect.field(expr, "_asc").name == strType)
-									return expr;
+							if (Std.isOfType(expr, HScriptedClass) && UnsafeReflect.field(expr, "_asc").name == strType) {
+								return expr;
 							}
 							error(EUnexpected(strType));
 							return null;
@@ -540,38 +537,39 @@ class Interp {
 		}
 	}
 
-	public function setScriptObjectVar(id:String, v:Dynamic) {
+	public function setThisVar(id:String, v:Dynamic):Dynamic {
 		if (_hasScriptObject && !varExists(id)) {
 			inline function instanceHasField() return __instanceFields.contains(id);
 			inline function instanceHasSetField() return !isBypassAccessor && __instanceFields.contains("set_" + id);
-			if (_scriptObjectType == SObject && instanceHasField()) {
-				UnsafeReflect.setField(scriptObject, id, v);
-				return v;
-			}
-
-			if (_scriptObjectType == SCustomClass) {
-				if(isBypassAccessor) {
-					_proxy._allowSetGet = false;
-					var res = _proxy.set(id, v);
-					_proxy._allowSetGet = true;
-					return res;
-				}
-				return _proxy.set(id, v);
-			}
-			if (_scriptObjectType == SBehaviourClass) {
-				return cast(scriptObject, IHScriptCustomBehaviour).hset(id, v);
-			}
-
-			if (instanceHasField()) {
-				if (isBypassAccessor) {
-					UnsafeReflect.setField(scriptObject, id, v);
-					return v;
-				} else {
-					UnsafeReflect.setProperty(scriptObject, id, v);
-					return UnsafeReflect.field(scriptObject, id);
-				}
-			} else if (instanceHasSetField()) { // setter
-				return UnsafeReflect.field(scriptObject, 'set_$id')(v);
+			switch (_scriptObjectType) {
+				case SObject:
+					if (instanceHasField())
+					{
+						UnsafeReflect.setField(scriptObject, id, v);
+						return v;
+					}
+				case SCustomClass:
+					if(isBypassAccessor) {
+						_proxy._allowSetGet = false;
+						var res = _proxy.set(id, v);
+						_proxy._allowSetGet = true;
+						return res;
+					}
+					return _proxy.set(id, v);
+				case SBehaviourClass:
+					return cast(scriptObject, IHScriptCustomBehaviour).hset(id, v);
+				default:
+					if (instanceHasField()) {
+						if (isBypassAccessor) {
+							UnsafeReflect.setField(scriptObject, id, v);
+							return v;
+						} else {
+							UnsafeReflect.setProperty(scriptObject, id, v);
+							return UnsafeReflect.getProperty(scriptObject, id);
+						}
+					} else if (instanceHasSetField()) { // setter
+						return UnsafeReflect.field(scriptObject, 'set_$id')(v);
+					}
 			}
 		}
 		setVar(id, v);
@@ -588,7 +586,7 @@ class Interp {
 		switch (Tools.expr(e1)) {
 			case EIdent(id):
 				if (!locals.exists(id)) {
-					return setScriptObjectVar(id, v);
+					v = setThisVar(id, v);
 				} else {
 					var l = locals.get(id);
 					l.r = v;
@@ -596,14 +594,7 @@ class Interp {
 						setVar(id, v);
 					}
 				}
-			// TODO
 			case EField(e, f, s):
-				// if (Tools.expr(e).match(EIdent("this")) && _proxy != null && _proxy.superClass !=null && _proxy.superHasField(f))
-				// {
-				// 	UnsafeReflect.setProperty(_proxy.superClass, f, v);
-				// 	return v;
-				// }
-				// TODO: Fix bug with assign after "trace(this)" and not
 				var obj = expr(e);
 				if (s && obj == null)
 					return null;
@@ -633,7 +624,7 @@ class Interp {
 			case EIdent(id):
 				v = fop(expr(e1), expr(e2));
 				if (!locals.exists(id)) {
-					setScriptObjectVar(id, v);
+					v = setThisVar(id, v);
 				} else {
 					var l = locals.get(id);
 					l.r = v;
@@ -652,7 +643,6 @@ class Interp {
 				var index:Dynamic = expr(index);
 				if (isMap(arr)) {
 					var map = getMap(arr);
-
 					v = fop(map.get(index), expr(e2));
 					map.set(index, v);
 				} else {
@@ -671,24 +661,23 @@ class Interp {
 		var v:Dynamic = null;
 		switch (Tools.expr(e1)) {
 			case EIdent(id):
-				var l = locals[id];
+				var l = locals.get(id);
 				v = fop(aFunc, bFunc);
 				if (l == null) {
-					return setScriptObjectVar(id, v);
-				}
-				else
+					v = setThisVar(id, v);
+				} else {
 					l.r = v;
+				}
 			case EField(e, f, s):
 				var obj = expr(e);
-				if(s && obj == null) return null;
-				v = fop(() ->get(obj, f), bFunc);
-				v = set(obj, f, v);
+				if(s && obj == null)
+					return null;
+				v = set(obj, f, fop(() -> get(obj, f), bFunc));
 			case EArray(e, index):
 				var arr:Dynamic = expr(e);
 				var index:Dynamic = expr(index);
 				if (isMap(arr)) {
 					var map = getMap(arr);
-
 					v = fop(()->map.get(index), bFunc);
 					map.set(index, v);
 				} else {
@@ -714,20 +703,19 @@ class Interp {
 					if (prefix) {
 						v += delta;
 						l.r = v;
-					} else
+					} else {
 						l.r = v + delta;
+					}
 					return v;
 				} else {
 					var v:Dynamic = resolve(id);
 					if (prefix) {
 						v += delta;
-						return setScriptObjectVar(id, v);
+						v = setThisVar(id, v);
+					} else {
+						v = setThisVar(id, v + delta);
 					}
-					else
-					{
-						setScriptObjectVar(id, v + delta);
-						return v;
-					}
+					return v;
 				}
 			case EField(e, f, s):
 				var obj = expr(e);
@@ -737,15 +725,15 @@ class Interp {
 				if (prefix) {
 					v += delta;
 					set(obj, f, v);
-				} else
+				} else {
 					set(obj, f, v + delta);
+				}
 				return v;
 			case EArray(e, index):
 				var arr:Dynamic = expr(e);
 				var index:Dynamic = expr(index);
 				if (isMap(arr)) {
 					var map = getMap(arr);
-
 					var v = map.get(index);
 					if (prefix) {
 						v += delta;
@@ -1114,10 +1102,10 @@ class Interp {
 				return null;
 
 			case EConst(c):
-				switch (c) {
-					case CInt(v): return v;
-					case CFloat(f): return f;
-					case CString(s): return s;
+				return switch (c) {
+					case CInt(v): v;
+					case CFloat(f): f;
+					case CString(s): s;
 				}
 			case EIdent(id):
 				var l = locals.get(id);
@@ -1183,12 +1171,12 @@ class Interp {
 					case EField(e, f, s):
 						var obj = expr(e);
 						if (obj == null) {
-							var maybeFunc = usingFunctions.get(f);
-							if (maybeFunc != null)
+							var usFunc = usingFunctions.get(f);
+							if (usFunc != null)
 							{
 								var args:Array<Dynamic> = [for (p in params) expr(p)];
 								args.unshift(null);
-								return call(null, maybeFunc, args);
+								return call(null, usFunc, args);
 							}
 							if (s)
 								return null;
@@ -1554,24 +1542,27 @@ class Interp {
 	}
 
 	function makeIterator(v:Dynamic, ?allowKeyValue = false):Iterator<Dynamic> {
-		#if ((flash && !flash9) || (php && !php7 && haxe_ver < '4.0.0'))
-		if (v.iterator != null)
+		#if (js || (flash && !flash9) || (php && !php7 && haxe_ver < '4.0.0'))
+		#if js
+		if( v is Array )
+			return (v : Array<Dynamic>).iterator();
+		#end
+		if (allowKeyValue && v.keyValueIterator != null) {
+			v = v.keyValueIterator();
+			// try v = v.keyValueIterator() catch (e:Dynamic) {};
+		} else if (v.iterator != null) {
+			// try v = v.iterator() catch (e:Dynamic) {};
 			v = v.iterator();
+		}
 		#else
 		if (allowKeyValue) {
-			try
-				v = v.keyValueIterator()
-			catch (e:Dynamic) {};
+			try v = v.keyValueIterator() catch (e:Dynamic) {};
 		}
-
 		if (v.hasNext == null || v.next == null) {
-			try
-				v = v.iterator()
-			catch (e:Dynamic) {};
+			try v = v.iterator() catch (e:Dynamic) {};
 		}
 		#end
-		if (v.hasNext == null || v.next == null)
-			error(EInvalidIterator(v));
+		if (v.hasNext == null || v.next == null) error(EInvalidIterator(v));
 		return v;
 	}
 
@@ -1645,7 +1636,7 @@ class Interp {
 	function get(o:Dynamic, f:String):Dynamic {
 		if (o == null)
 			error(EInvalidAccess(f));
-		var cls;
+		var cls:Class<Any> = null;
 		if (useRedirects && {
 			var cl:Null<String> = getClassType(o, cls = Type.getClass(o));
 			cl != null && (_getRedirect = getRedirects.get(cl)) != null;

@@ -202,7 +202,7 @@ class Parser {
 
 	public function parseString( s : String, ?origin : String = "hscript" ) : Expr {
 		initParser(origin);
-		if(s == "") s = "0;"; // fixing crash with empty file
+		if (s == null || s.length == 0) s = "0;"; // fixing crash with empty file
 		input = s;
 		readPos = 0;
 		var a:Array<Expr> = new Array();
@@ -1582,6 +1582,7 @@ class Parser {
 
 	public function parseModule( content : String, ?origin : String = "hscript" ) {
 		initParser(origin);
+		if (content == null || content.length == 0) content = "import flixel.FlxG;"; // fixing crash with empty file
 		input = content;
 		readPos = 0;
 		allowTypes = true;

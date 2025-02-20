@@ -31,7 +31,8 @@ class ClassTools
 	;
 	public static function init()
 	{
-		#if !display
+		if(Context.defined("display")) return;
+
 		function onGenerate(t:Type)
 		{
 			switch t
@@ -78,15 +79,16 @@ class ClassTools
 		final self = TypeTools.getClass(Context.getType('hscript.macros.ClassTools'));
 		Context.onGenerate(function(types:Array<Type>)
 		{
-			for (t in types)
-				onGenerate(t);
+			for (t in types) onGenerate(t);
+
 			self.meta.remove('typedefDefines');
 			self.meta.remove('allClassesAvailable');
+
+			// for (name => orig in typedefDefines) trace(name + " => " + orig);
 
 			self.meta.add('typedefDefines', [for (name => orig in typedefDefines) macro [$v{name}, $v{orig}]], Context.currentPos());
 			self.meta.add('allClassesAvailable', [for (i in allClassesAvailable) macro $v{i}], Context.currentPos());
 		});
-		#end
 	}
 	#end
 }

@@ -18,7 +18,6 @@ class HScriptedClassMacro
 	 */
 	public static macro function build():Array<Field>
 	{
-		if (Context.defined("display")) return null;
 		var cls:ClassType = Context.getLocalClass().get();
 
 		if (cls.meta.get().find(m -> return m.name == 'hscriptClassPreProcessed') != null)
