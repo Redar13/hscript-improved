@@ -14,12 +14,36 @@ class ClassTools
 	public static final allClassesAvailable:Array<String> = #if macro
 		[];
 	#else
-		cast Meta.getType(ClassTools).allClassesAvailable;
+		{
+			var finalArr:Array<String> = null;
+			try
+			{
+				finalArr = cast Meta.getType(ClassTools).allClassesAvailable;
+			}
+			catch(e)
+			{
+				trace(e);
+			}
+			if (finalArr == null)
+				finalArr = [];
+			finalArr;
+		}
 	#end
 	public static final typedefDefines:Map<String,String> = #if macro
 		[];
 	#else
-		[for (i in cast (Meta.getType(ClassTools).typedefDefines, Array<Dynamic>)) i[0] => i[1]];
+		{
+			var finalMap:Map<String,String> = [];
+			try
+			{
+				finalMap = [for (i in cast (Meta.getType(ClassTools).typedefDefines, Array<Dynamic>)) i[0] => i[1]];
+			}
+			catch(e)
+			{
+				trace(e);
+			}
+			finalMap;
+		}
 	#end
 
 	#if macro
