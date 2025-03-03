@@ -2439,9 +2439,9 @@ class Parser {
 					case CFloat(f): return waitFloat || convertPreProcValsToStr ? Std.string(f) : f;
 					case CString(s): return s;
 				}
-			case ECall(expr(_) => EIdent("version"), expr(_[0]) => EConst(CString(s))): // this thing exists lol
+			case ECall(expr(_) => EIdent("version"), expr(_[0]) => EConst(CString(s))):
 				return s;
-			// ?todo: allow more
+			// todo: allow more?
 			default:
 				error(EInvalidPreprocessor(edef.getName()), readPos, readPos);
 				return null;
@@ -2453,7 +2453,8 @@ class Parser {
 		var edef:ExprDef = expr(e);
 		switch( edef ) {
 			case EIdent(id):
-				return preprocValue(id) != null;
+				var val:Dynamic = preprocValue(id);
+				return val != null && val != 0 && val != false;
 			case EField(e2, f):
 				switch(expr(e2)) {
 					case EIdent(id):

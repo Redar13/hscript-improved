@@ -557,7 +557,10 @@ class Interp {
 					}
 					return _proxy.set(id, v);
 				case SBehaviourClass:
-					return cast(scriptObject, IHScriptCustomBehaviour).hset(id, v);
+					var scriptObject:IHScriptCustomBehaviour = cast scriptObject;
+					if (scriptObject.hExistsOnSet(id))
+						return scriptObject.hset(id, v);
+					// return cast(scriptObject, IHScriptCustomBehaviour).hset(id, v);
 				default:
 					if (instanceHasField()) {
 						if (isBypassAccessor) {
@@ -883,8 +886,9 @@ class Interp {
 					}
 				*/
 				case SBehaviourClass:
-					// if (instanceHasField())
-						return cast(scriptObject, IHScriptCustomBehaviour).hget(id);
+					var scriptObject:IHScriptCustomBehaviour = cast scriptObject;
+					if (scriptObject.hExistsOnGet(id))
+						return scriptObject.hget(id);
 				default:
 					if (instanceHasField()) {
 						if (isBypassAccessor) {
