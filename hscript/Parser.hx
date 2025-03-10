@@ -168,8 +168,7 @@ class Parser {
 	}
 
 	public inline function error( err, pmin, pmax ) {
-		// for (i in haxe.CallStack.callStack()) trace(i);
-		haxe.Log.trace(haxe.CallStack.toString(haxe.CallStack.callStack()), null);
+		// haxe.Log.trace(haxe.CallStack.toString(haxe.CallStack.callStack()), null);
 		if( !resumeErrors )
 		#if hscriptPos
 		throw new Error(err, pmin, pmax, origin, line);
