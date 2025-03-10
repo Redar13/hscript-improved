@@ -21,6 +21,7 @@
  */
 package hscript;
 
+import hscript.thx_semver.Version;
 import hscript.Expr;
 
 #if hscriptPos
@@ -57,7 +58,7 @@ enum Token {
 	TQuestion; // ?
 	TDoubleDot; // :
 	TMeta( s : String ); // @:MyMeta
-	TPrepro( s : String ); // #if
+	TPrepro( s : String ); // #text
 }
 
 @:analyzer(optimize, local_dce, fusion, user_var_fusion)
@@ -75,6 +76,11 @@ class Parser {
 		allows to check for #if / #else in code
 	**/
 	public var preprocesorValues : Map<String,Dynamic> = new Map();
+
+	/**
+		defines preprocessor variables that will be considered false
+	**/
+	public var invalidPreprocessValues : Array<String> = ["null", "0", "false"];
 
 	/**
 		activate JSON compatiblity
@@ -95,8 +101,6 @@ class Parser {
 		allow haxe metadata declarations
 	**/
 	public var allowMetadata : Bool;
-
-	public var convertPreProcValsToStr : Bool;
 
 	/**
 		resume from parsing errors (when parsing incomplete code, during completion for example)
@@ -131,7 +135,6 @@ class Parser {
 
 	public function new() {
 		line = 1;
-		convertPreProcValsToStr = true;
 		opChars = "+*/-=!><&|^%~";
 		identChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_";
 		startIdentChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_";
@@ -158,13 +161,16 @@ class Parser {
 			}
 
 		// unary "-" handled in parser directly!
-		opPriority.set("!", -2);
 		opPriority.set("++", -1);
 		opPriority.set("--", -1);
+		opPriority.set("!", -2);
 		opPriority.set("~", -2);
 	}
 
 	public inline function error( err, pmin, pmax ) {
+		// trace(id);
+		for (i in haxe.CallStack.callStack()) trace(i);
+		// trace('');
 		if( !resumeErrors )
 		#if hscriptPos
 		throw new Error(err, pmin, pmax, origin, line);
@@ -1288,7 +1294,7 @@ class Parser {
 				}
 
 				if( opPriority.get(op) == -1 ) {
-					if( isBlock(e1) || switch(Tools.expr(e1)) { case EParent(_): true; default: false; } ) { // TODO: clean QQQ
+					if( isBlock(e1) || Tools.expr(e1).match(EParent(_)) ) { // TODO: clean QQQ
 						push(tk);
 						return e1;
 					}
@@ -2393,13 +2399,114 @@ class Parser {
 
 	var preprocStack : Array<{ r : Bool }>;
 
+	function parsePreproCondNext(e1:Expr): Expr {
+		var tk = token();
+		switch( tk ) {
+			case TOp(op):
+				if( op == "->" ) {
+					// single arg reinterpretation of `f -> e` and `(f) -> e`
+					switch( Tools.expr(e1) ) {
+						case EIdent(i), EParent(Tools.expr(_) => EIdent(i)):
+							var eret = parsePreproCond();
+							return mk(EFunction([new Argument(i)], mk(EReturn(eret),pmin(eret))), pmin(e1));
+						default:
+					}
+					unexpected(tk);
+				}
+
+				if(disableOrOp && op == "|") {
+					push(tk);
+					return e1;
+				}
+
+				if( opPriority.get(op) == -1 ) {
+					if( isBlock(e1) || Tools.expr(e1).match(EParent(_)) ) { // TODO: clean QQQ
+						push(tk);
+						return e1;
+					}
+					return parsePreproCondNext(mk(EUnop(Tools.getUnopEnum(op),false,e1),pmin(e1)));
+				}
+				return makeBinop(op,e1,parsePreproCond());
+
+			case TDot | TQuestionDot:
+				var field = getIdent();
+				return parsePreproCondNext(mk(EField(e1, field, tk == TQuestionDot), pmin(e1)));
+			case TPOpen:
+				// switch (e1)
+				// {
+					// case EField(e, "bind"):
+					// 	var paramsExpr = parseExprList(TPClose).map(i -> return i.matching(EIdent("_")) ? null : i);
+					// 	return mk(EFunction([for (i in paramsExpr) new Argument(i, t)], null, pmin(e1)));
+					// default:
+						var args = new Array();
+						var tk = token();
+						if( tk != TPClose )
+						{
+							push(tk);
+							while( true ) {
+								args.push(parsePreproCond());
+								tk = token();
+								switch( tk ) {
+									case TComma:
+									default:
+										if( tk == TPClose ) break;
+										unexpected(tk);
+										break;
+								}
+							}
+						}
+						return parsePreproCondNext(mk(ECall(e1, args),pmin(e1)));
+				// }
+			case TBkOpen:
+				var e2 = parsePreproCond();
+				ensure(TBkClose);
+				return parsePreproCondNext(mk(EArray(e1,e2),pmin(e1)));
+			case TQuestion:
+				var e2 = parsePreproCond();
+				ensure(TDoubleDot);
+				var e3 = parsePreproCond();
+				return mk(ETernary(e1,e2,e3),pmin(e1),pmax(e3));
+			default:
+				push(tk);
+				return e1;
+		}
+	}
 	function parsePreproCond():Expr {
 		var tk = token();
-		return switch( tk ) {
+		switch( tk ) {
 			case TPOpen:
-				push(TPOpen);
-				parseExpr();
+				// push(TPOpen);
+				// parseExpr();
+
+				#if hscriptPos
+				var p1 = tokenMin;
+				#end
+				tk = token();
+				if( tk == TPClose ) {
+					ensureToken(TOp("->"));
+					var eret = parsePreproCond();
+					return mk(EFunction([], mk(EReturn(eret),p1)), p1);
+				}
+				push(tk);
+				var oldoo = disableOrOp;
+				disableOrOp = false;
+				var e = parsePreproCond();
+				disableOrOp = oldoo;
+				tk = token();
+				switch( tk ) {
+					case TPClose:
+						return parsePreproCondNext(mk(EParent(e),p1,tokenMax));
+					case TComma:
+						switch( expr(e) ) {
+							case EIdent(v): return parseLambda([new Argument(v)], pmin(e));
+							default:
+						}
+					default:
+				}
+				return unexpected(tk);
+
 			case TId(id):
+				trace(id);
 				var tk;
 				while(true) {
 					tk = token();
@@ -2416,32 +2523,63 @@ class Parser {
 						break;
 					}
 				}
-				mk(EIdent(id), tokenMin, tokenMax);
-			case TOp("!"):
-				mk(EUnop(OpNot, true, parsePreproCond()), tokenMin, tokenMax);
+				return parsePreproCondNext(mk(EIdent(id), tokenMin, tokenMax));
+			case TConst(c):
+				return parsePreproCondNext(mk(EConst(c), tokenMin, tokenMax));
+			// 	case TOp("!"):
+			// 		return mk(EUnop(OpNot, true, parsePreproCond()), tokenMin, tokenMax);
+			case TOp(op):
+				if( op == "-" ) {
+					var start = tokenMin;
+					var oldoo = disableOrOp;
+					disableOrOp = false;
+					var e = parsePreproCond();
+					disableOrOp = oldoo;
+					if( e == null )
+						return makeUnop(op,e);
+					switch( expr(e) ) {
+						case EConst(CInt(i)):
+							return mk(EConst(CInt(-i)), start, pmax(e));
+						case EConst(CFloat(f)):
+							return mk(EConst(CFloat(-f)), start, pmax(e));
+						default:
+							return makeUnop(op,e);
+					}
+				}
+				if( opPriority.get(op) < 0 )
+					return makeUnop(op,parsePreproCond());
+				return unexpected(tk);
 			default:
-				unexpected(tk);
+				return unexpected(tk);
 		}
 	}
 
-	function getValFromExpr( e : Expr, ?waitFloat:Bool ):Dynamic
+	function getValFromPreproExpr( e : Expr ) : Dynamic
 	{
 		var edef:ExprDef = expr(e);
 		switch( edef )
 		{
 			case EParent(e):
-				return getValFromExpr(e, waitFloat);
+				return getValFromPreproExpr(e);
 			case EIdent(id):
 				return preprocValue(id);
 			case EConst(c):
-				switch (c) {
-					case CInt(v): return waitFloat || convertPreProcValsToStr ? Std.string(v) : v;
-					case CFloat(f): return waitFloat || convertPreProcValsToStr ? Std.string(f) : f;
-					case CString(s): return s;
+				return switch (c) {
+					case CInt(v): v;
+					case CFloat(f): f;
+					case CString(s): s;
 				}
 			case ECall(expr(_) => EIdent("version"), expr(_[0]) => EConst(CString(s))):
-				return s;
-			// todo: allow more?
+				try
+				{
+					return (s : Version);
+				}
+				catch (e)
+				{
+					error(EInvalidPreprocessor('version($s)'), readPos, readPos);
+					return null;
+				}
+
 			default:
 				error(EInvalidPreprocessor(edef.getName()), readPos, readPos);
 				return null;
@@ -2453,12 +2591,13 @@ class Parser {
 		var edef:ExprDef = expr(e);
 		switch( edef ) {
 			case EIdent(id):
-				var val:Dynamic = preprocValue(id);
-				return val != null && val != 0 && val != false;
-			case EField(e2, f):
-				switch(expr(e2)) {
+				var val:String = Std.string(preprocValue(id));
+				return !invalidPreprocessValues.contains(val);
+			case EField(e1, f1):
+				switch(expr(e1)) {
 					case EIdent(id):
-						return preprocValue(id + "." + f) != null;
+						var val:String = Std.string(preprocValue('$id.$f1'));
+						return !invalidPreprocessValues.contains(val);
 					case edef2:
 						error(EInvalidPreprocessor("Can't eval " + edef.getName() + " with " + edef2.getName()), readPos, readPos);
 						return false;
@@ -2474,19 +2613,37 @@ class Parser {
 						return evalPreproCond(e1) && evalPreproCond(e2);
 					case OpBoolOr:
 						return evalPreproCond(e1) || evalPreproCond(e2);
-					case OpEq:
-						return getValFromExpr(e1) == getValFromExpr(e2);
-					case OpNotEq:
-						return getValFromExpr(e1) != getValFromExpr(e2);
-					case OpGte:
-						return getValFromExpr(e1, true) >= getValFromExpr(e2, true);
-					case OpGt:
-						return getValFromExpr(e1, true) > getValFromExpr(e2, true);
-					case OpLte:
-						return getValFromExpr(e1, true) >= getValFromExpr(e2, true);
-					case OpLt:
-						return getValFromExpr(e1, true) > getValFromExpr(e2, true);
-					default:
+					case op:
+						var e1:Dynamic = getValFromPreproExpr(e1);
+						var e2:Dynamic = getValFromPreproExpr(e2);
+						try
+						{
+							final vers1:Version = Std.string(e1);
+							final vers2:Version = Std.string(e2);
+							e1 = vers1;
+							e2 = vers2;
+						}
+						catch(_) {}
+						try
+						{
+							switch (op)
+							{
+								case OpEq:
+									return e1 == e2;
+								case OpNotEq:
+									return e1 != e2;
+								case OpGte:
+									return e1 >= e2;
+								case OpGt:
+									return e1 > e2;
+								case OpLte:
+									return e1 <= e2;
+								case OpLt:
+									return e1 < e2;
+								default:
+							}
+						}
+						catch(_) { }
 						error(EInvalidPreprocessor('Uncorrected operator \'$op\''), readPos, readPos);
 						return false;
 				}
@@ -2504,13 +2661,11 @@ class Parser {
 	function preprocess( id : String ) : Token {
 		switch( id ) {
 			case "if":
-				var e = parsePreproCond();
-				if( evalPreproCond(e) ) {
-					preprocStack.push({ r : true });
-					return token();
+				var result:Bool = evalPreproCond(parsePreproCond());
+				preprocStack.push({ r : result });
+				if(!result) {
+					skipTokens();
 				}
-				preprocStack.push({ r : false });
-				skipTokens();
 				return token();
 			case "else", "elseif" if( preprocStack.length > 0 ):
 				var last = preprocStack[preprocStack.length - 1];

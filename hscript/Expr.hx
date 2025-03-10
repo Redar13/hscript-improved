@@ -424,7 +424,7 @@ class Error_ {
 	public var pmax : Int;
 	public var origin : String;
 	public var line : Int;
-	public function new(e, pmin, pmax, origin, line) {
+	public function new(e : ErrorDef, pmin : Int, pmax : Int, origin : String, line : Int) {
 		this.e = e;
 		this.pmin = pmin;
 		this.pmax = pmax;
