@@ -37,7 +37,6 @@ import haxe.iterators.StringKeyValueIteratorUnicode;
 import hscript.Expr;
 import hscript.HScriptedClass;
 import hscript.UnsafeReflect;
-import hscript.custom_classes.PolymodAbstractScriptClass;
 import hscript.custom_classes.PolymodClassDeclEx;
 import hscript.custom_classes.PolymodScriptClass;
 import hscript.macros.ClassTools;
@@ -209,7 +208,8 @@ class Interp {
 	var inTry:Bool;
 	var declared:Array<RedeclaredVar>;
 	var returnValue:Dynamic;
-	var me(default, null):Interp;
+	var me(get, never):Interp;
+	inline function get_me() return this;
 
 	var isBypassAccessor:Bool = false;
 
@@ -231,10 +231,9 @@ class Interp {
 	var curExpr:Expr;
 	#end
 
-	var _proxy:PolymodAbstractScriptClass = null;
+	var _proxy:PolymodScriptClass = null;
 
 	public function new(?targetObj:Dynamic) {
-		me = this;
 		locals = new Map();
 		declared = new Array();
 		resetVariables();
@@ -538,7 +537,8 @@ class Interp {
 	}
 
 	public function setThisVar(id:String, v:Dynamic):Dynamic {
-		if (_hasScriptObject && !varExists(id)) {
+		if (_hasScriptObject && !varExists(id))
+		{
 			inline function instanceHasField() return __instanceFields.contains(id);
 			inline function instanceHasSetField() return !isBypassAccessor && __instanceFields.contains("set_" + id);
 			switch (_scriptObjectType) {
@@ -618,7 +618,7 @@ class Interp {
 	}
 
 	function assignOp(op, fop:Dynamic->Dynamic->Dynamic) {
-		binops.set(op, function(e1, e2) return me.evalAssignOp(fop, e1, e2));
+		binops.set(op, evalAssignOp.bind(fop, _, _));
 	}
 
 	function evalAssignOp(fop:(a:Dynamic, b:Dynamic)->Dynamic, e1, e2):Dynamic {
@@ -1651,14 +1651,14 @@ class Interp {
 		if (Std.isOfType(o, IHScriptCustomBehaviour))
 			return cast(o, IHScriptCustomBehaviour).hget(f);
 		if (Std.isOfType(o, PolymodScriptClass))
-			return cast(o, PolymodAbstractScriptClass).get(f);
+			return cast(o, PolymodScriptClass).get(f);
 		if (Std.isOfType(o, HScriptedClass)) {
-			var proxy:PolymodAbstractScriptClass = UnsafeReflect.field(o, "_asc");
+			var proxy:PolymodScriptClass = UnsafeReflect.field(o, "_asc");
 			if (proxy != null)
 				return proxy.get(f);
 		}
 		// if (o is HScriptedClass && o != scriptObject) {
-		// 	var proxy:PolymodAbstractScriptClass = Reflect.field(o, "_asc");
+		// 	var proxy:PolymodScriptClass = Reflect.field(o, "_asc");
 		// 	if (proxy._interp.variables.exists(f))
 		// 	{
 		// 		return proxy._interp.variables.get(f);
@@ -1706,13 +1706,13 @@ class Interp {
 				}
 				return v;
 			 */
-			return cast(o, PolymodAbstractScriptClass).set(f, v);
+			return cast(o, PolymodScriptClass).set(f, v);
 		}
 		if (Std.isOfType(o, HScriptedClass)) {
-			var proxy:PolymodAbstractScriptClass = UnsafeReflect.field(o, "_asc");
+			var proxy:PolymodScriptClass = UnsafeReflect.field(o, "_asc");
 			if (proxy != null)
 				return proxy.set(f, v);
-			// return cast(UnsafeReflect.field(o, "_asc"), PolymodAbstractScriptClass).set(f, v);
+			// return cast(UnsafeReflect.field(o, "_asc"), PolymodScriptClass).set(f, v);
 		}
 		if (isBypassAccessor)
 			UnsafeReflect.setField(o, f, v);
@@ -1851,7 +1851,7 @@ class Interp {
 		}
 	}
 
-	public function createScriptClassInstance(className:String, ?args:Array<Dynamic>):PolymodAbstractScriptClass {
+	public function createScriptClassInstance(className:String, ?args:Array<Dynamic>):PolymodScriptClass {
 		switch (getCustomClass(className)) {
 			case EClass(className, fields, extend, interfaces):
 				function importVar(thing:String):Class<Dynamic> {

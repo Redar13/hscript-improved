@@ -26,7 +26,7 @@ enum Param
 @:allow(hscript.Interp)
 class PolymodScriptClass
 {
-	public static function createScriptClassInstance(clsName:String, interp:Interp, ?args:Array<Dynamic>):PolymodAbstractScriptClass
+	public static function createScriptClassInstance(clsName:String, interp:Interp, ?args:Array<Dynamic>):PolymodScriptClass
 	{
 		return interp.createScriptClassInstance(clsName, args);
 	}
@@ -506,8 +506,7 @@ class PolymodScriptClass
 				UnsafeReflect.setProperty(superClass, name, value);
 			}
 			return value;
-		}
-		{
+		} else if (_allowSetGet && superHasField('set_$name')) {
 			return UnsafeReflect.field(superClass, 'set_$name')(value);
 		}
 		return value;

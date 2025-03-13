@@ -2500,15 +2500,13 @@ class Parser {
 						return evalPreproCond(e1) && evalPreproCond(e2);
 					case OpBoolOr:
 						return evalPreproCond(e1) || evalPreproCond(e2);
-					case op:
+					default:
 						var e1:Dynamic = getValFromPreproExpr(e1);
 						var e2:Dynamic = getValFromPreproExpr(e2);
 						try
 						{
-							var vers1:Version = cast e1;
-							if (vers1 == null) vers1 = Std.string(e1);
-							var vers2:Version = cast e2;
-							if (vers2 == null) vers2 = Std.string(e2);
+							var vers1:Version = Std.string(e1);
+							var vers2:Version = Std.string(e2);
 							e1 = vers1;
 							e2 = vers2;
 						}
@@ -2536,11 +2534,6 @@ class Parser {
 						error(EInvalidPreprocessor('Uncorrected operator \'$op\''), readPos, readPos);
 						return false;
 				}
-				/*
-				var define = preprocesorValues.get(e1);
-				var expr2 = expr(e2);
-				return define != null && define == switch (expr2){case EIdent(id): id default: evalPreproCond(expr2)};
-				*/
 			default:
 				error(EInvalidPreprocessor("Can't eval " + edef.getName()), readPos, readPos);
 				return false;
@@ -2548,45 +2541,64 @@ class Parser {
 	}
 
 	var inPrepoIf:Bool = false;
+	var meetedPrepoElse:String = null;
 
 	function preprocess( id : String ) : Token {
 		switch( id ) {
 			case "if":
+				var oldMeetedPrepoElse = meetedPrepoElse;
 				var oldInPreprIf = inPrepoIf;
 				inPrepoIf = true;
-				var expr = parsePreproCond();
+				var result = evalPreproCond(parsePreproCond());
 				if (inPrepoIf) {
 					inPrepoIf = oldInPreprIf;
-					var result:Bool = evalPreproCond(expr);
 					preprocStack.push({ r : result });
 					if(!result) {
 						skipTokens();
 					}
 				} else {
 					inPrepoIf = oldInPreprIf;
+					if (meetedPrepoElse != null && !result){
+						preprocess(meetedPrepoElse);
+					}
+					var tk = token();
+					if (!tk.match(TPrepro("end" | "else")))
+						push(tk);
 				}
+				meetedPrepoElse = oldMeetedPrepoElse;
 				return token();
-			case "else", "elseif" if( preprocStack.length > 0 ):
-				var last = preprocStack[preprocStack.length - 1];
-				if( last.r ) {
-					last.r = false;
-					skipTokens();
-					return token();
-				} else if( id == "else" ) {
-					preprocStack[preprocStack.length - 1] = { r : true };
-					return token();
-				} else {
-					// elseif
-					preprocStack.pop();
-					return preprocess("if");
+			case "else", "elseif":
+				// if (inPrepoIf) {
+				// 	inPrepoIf = false;
+				// 	if( id == "else" ) {
+				// 		return token();
+				// 	} else {
+				// 		// elseif
+				// 		return preprocess("if");
+				// 	}
+				// } else
+				if (inPrepoIf) {
+					inPrepoIf = false; // empty #if block
+					meetedPrepoElse = id;
+				} else if( preprocStack.length > 0 ) {
+					var last = preprocStack[preprocStack.length - 1];
+					if( last.r ) {
+						last.r = false;
+						skipTokens();
+						return token();
+					} else if( id == "else" ) {
+						preprocStack[preprocStack.length - 1] = { r : true };
+						return token();
+					} else {
+						// elseif
+						preprocStack.pop();
+						return preprocess("if");
+					}
 				}
 			case "end":
-				if (inPrepoIf)
-				{
-					inPrepoIf = false; // is empty
-				}
-				else if( preprocStack.length > 0 )
-				{
+				if (inPrepoIf) {
+					inPrepoIf = false; // empty #if block
+				} else if( preprocStack.length > 0 ) {
 					preprocStack.pop();
 				}
 				return token();
