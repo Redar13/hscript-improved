@@ -499,12 +499,14 @@ class PolymodScriptClass
 	}
 	private function setSuperVar(name:String, value:Dynamic):Dynamic
 	{
-		if (superHasField(name))
-		{
-			UnsafeReflect.setProperty(superClass, name, value);
+		if (superHasField(name)) {
+			if(_interp.isBypassAccessor) {
+				UnsafeReflect.setField(superClass, name, value);
+			} else {
+				UnsafeReflect.setProperty(superClass, name, value);
+			}
 			return value;
 		}
-		else if (_allowSetGet && superHasField('set_$name'))
 		{
 			return UnsafeReflect.field(superClass, 'set_$name')(value);
 		}
