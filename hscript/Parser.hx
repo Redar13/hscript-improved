@@ -2454,12 +2454,9 @@ class Parser {
 					case CString(s): s;
 				}
 			case ECall(expr(_) => EIdent("version"), expr(_[0]) => EConst(CString(s))):
-				try
-				{
+				try {
 					(s : Version);
-				}
-				catch(_)
-				{
+				} catch(_) {
 					error(EInvalidPreprocessor('Invalid version string $s. Should follow SemVer.'), readPos, readPos);
 				}
 				return s;
@@ -2503,18 +2500,10 @@ class Parser {
 					default:
 						var e1:Dynamic = getValFromPreproExpr(e1);
 						var e2:Dynamic = getValFromPreproExpr(e2);
-						try
-						{
+						try {
 							var vers1:Version = Std.string(e1);
 							var vers2:Version = Std.string(e2);
-							e1 = vers1;
-							e2 = vers2;
-						}
-						catch(_) {}
-						try
-						{
-							switch (op)
-							{
+							switch (op) {
 								case OpEq:
 									return e1 == e2;
 								case OpNotEq:
@@ -2529,8 +2518,31 @@ class Parser {
 									return e1 < e2;
 								default:
 							}
+						} catch(e:String) { // doesn't capture SemVer error
+						} catch(e) {
+							error(EInvalidPreprocessor('Invalid operator \'$op\' for SemVer'), readPos, readPos);
+							return false;
 						}
-						catch(_) { }
+						try {
+							switch (op) {
+								case OpEq:
+									return e1 == e2;
+								case OpNotEq:
+									return e1 != e2;
+								case OpGte:
+									return e1 >= e2;
+								case OpGt:
+									return e1 > e2;
+								case OpLte:
+									return e1 <= e2;
+								case OpLt:
+									return e1 < e2;
+								default:
+							}
+						} catch(_) {
+							error(EInvalidPreprocessor('Invalid operator \'$op\''), readPos, readPos);
+							return false;
+						}
 						error(EInvalidPreprocessor('Uncorrected operator \'$op\''), readPos, readPos);
 						return false;
 				}
