@@ -2560,7 +2560,7 @@ class Parser {
 	function preprocess( id : String ) : Token {
 		inline function returnToken() {
 			return switch (token()) {
-				case TPrepro(id = "if" | "else" | "elseif" | "end"):
+				case TPrepro(id = "if" | "else" | "elseif" | "end" | "error"):
 					preprocess(id);
 				case t: t;
 			}
@@ -2607,6 +2607,9 @@ class Parser {
 					{
 						return unexpected(TPrepro(id));
 					}
+				case "error" if ( preprocStack.length == 0 || preprocStack[preprocStack.length - 1].r):					var tokenMin = tokenMin;
+					error(ECustom(getValFromPreproExpr(parsePreproCond())), tokenMin,tokenMax);
+					return returnToken();
 			}
 		}
 		return TPrepro(id);
