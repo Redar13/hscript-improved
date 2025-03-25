@@ -2073,6 +2073,7 @@ class Parser {
 
 		#if hscriptPos
 		var t = tokens.pop();
+
 		if( t != null ) {
 			tokenMin = t.min;
 			tokenMax = t.max;
@@ -2101,6 +2102,7 @@ class Parser {
 			char = this.char;
 			this.char = -1;
 		}
+
 		while( true ) {
 			if( StringTools.isEof(char) ) {
 				this.char = char;
@@ -2412,6 +2414,7 @@ class Parser {
 				push(TPOpen);
 				return parseExpr();
 			case TId(id):
+				var id = id;
 				var tk;
 				while(true) {
 					tk = token();
@@ -2491,8 +2494,7 @@ class Parser {
 			case EParent(e):
 				return evalPreproCond(e);
 			case EBinop(op, e1, e2):
-				switch (op)
-				{
+				switch (op) {
 					case OpBoolAnd:
 						return evalPreproCond(e1) && evalPreproCond(e2);
 					case OpBoolOr:
@@ -2552,68 +2554,59 @@ class Parser {
 		}
 	}
 
-	var inPrepoIf:Bool = false;
-	var meetedPrepoElse:String = null;
+	var _inIfPrepocess:Bool = false;
 
 	function preprocess( id : String ) : Token {
-		switch( id ) {
-			case "if":
-				var oldMeetedPrepoElse = meetedPrepoElse;
-				var oldInPreprIf = inPrepoIf;
-				inPrepoIf = true;
-				var result = evalPreproCond(parsePreproCond());
-				if (inPrepoIf) {
-					inPrepoIf = oldInPreprIf;
+		inline function returnToken() {
+			return switch (token()) {
+				case TPrepro(id = "if" | "else" | "elseif" | "end"):
+					preprocess(id);
+				case t: t;
+			}
+		}
+		if ( !_inIfPrepocess ) {
+			switch( id ) {
+				case "if":
+					_inIfPrepocess = true;
+					var result = evalPreproCond(parsePreproCond());
+					_inIfPrepocess = false;
 					preprocStack.push({ r : result });
 					if(!result) {
 						skipTokens();
 					}
-				} else {
-					inPrepoIf = oldInPreprIf;
-					if (meetedPrepoElse != null && !result){
-						preprocess(meetedPrepoElse);
+					return returnToken();
+				case "else", "elseif":
+					if ( preprocStack.length > 0 ) {
+						var last = preprocStack[preprocStack.length - 1];
+						if( last.r ) {
+							skipTokens();
+							last.r = false;
+							return returnToken();
+						} else if( id == "else" ) {
+							preprocStack.pop();
+							preprocStack.push({ r : true });
+							return returnToken();
+						} else {
+							// elseif
+							preprocStack.pop();
+							return preprocess("if");
+						}
 					}
-					var tk = token();
-					if (!tk.match(TPrepro("end" | "else")))
-						push(tk);
-				}
-				meetedPrepoElse = oldMeetedPrepoElse;
-				return token();
-			case "else", "elseif":
-				// if (inPrepoIf) {
-				// 	inPrepoIf = false;
-				// 	if( id == "else" ) {
-				// 		return token();
-				// 	} else {
-				// 		// elseif
-				// 		return preprocess("if");
-				// 	}
-				// } else
-				if (inPrepoIf) {
-					inPrepoIf = false; // empty #if block
-					meetedPrepoElse = id;
-				} else if( preprocStack.length > 0 ) {
-					var last = preprocStack[preprocStack.length - 1];
-					if( last.r ) {
-						last.r = false;
-						skipTokens();
-						return token();
-					} else if( id == "else" ) {
-						preprocStack[preprocStack.length - 1] = { r : true };
-						return token();
-					} else {
-						// elseif
+					else
+					{
+						return unexpected(TPrepro(id));
+					}
+				case "end":
+					if( preprocStack.length > 0 )
+					{
 						preprocStack.pop();
-						return preprocess("if");
+						return returnToken();
 					}
-				}
-			case "end":
-				if (inPrepoIf) {
-					inPrepoIf = false; // empty #if block
-				} else if( preprocStack.length > 0 ) {
-					preprocStack.pop();
-				}
-				return token();
+					else
+					{
+						return unexpected(TPrepro(id));
+					}
+			}
 		}
 		return TPrepro(id);
 	}
