@@ -2507,18 +2507,19 @@ class Parser {
 							var vers2:Version = Std.string(e2);
 							switch (op) {
 								case OpEq:
-									return e1 == e2;
+									return vers1 == vers2;
 								case OpNotEq:
-									return e1 != e2;
+									return vers1 != vers2;
 								case OpGte:
-									return e1 >= e2;
+									return vers1 >= vers2;
 								case OpGt:
-									return e1 > e2;
+									return vers1 > vers2;
 								case OpLte:
-									return e1 <= e2;
+									return vers1 <= vers2;
 								case OpLt:
-									return e1 < e2;
+									return vers1 < vers2;
 								default:
+									throw null;
 							}
 						} catch(e:String) { // doesn't capture SemVer error
 						} catch(e) {
