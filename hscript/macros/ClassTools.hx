@@ -6,7 +6,7 @@ import haxe.macro.Context;
 import haxe.macro.TypeTools;
 import haxe.macro.Type;
 #else
-import haxe.rtti.Meta;
+// import haxe.rtti.Meta;
 #end
 
 class ClassTools
@@ -16,16 +16,15 @@ class ClassTools
 	#else
 		{
 			var finalArr:Array<String> = null;
-			try
-			{
-				finalArr = cast Meta.getType(ClassTools).allClassesAvailable;
-			}
-			catch(e)
-			{
-				trace(e);
-			}
-			if (finalArr == null)
+			// try
+			// {
+			// 	finalArr = cast Meta.getType(ClassTools).allClassesAvailable;
+			// }
+			// catch(e)
+			// {
+			// 	trace(e);
 				finalArr = [];
+			// }
 			finalArr;
 		}
 	#end
@@ -33,15 +32,16 @@ class ClassTools
 		[];
 	#else
 		{
-			var finalMap:Map<String,String> = [];
-			try
-			{
-				finalMap = [for (i in cast (Meta.getType(ClassTools).typedefDefines, Array<Dynamic>)) i[0] => i[1]];
-			}
-			catch(e)
-			{
-				trace(e);
-			}
+			var finalMap:Map<String,String> = null;
+			// try
+			// {
+			// 	finalMap = [for (i in cast (Meta.getType(ClassTools).typedefDefines, Array<Dynamic>)) i[0] => i[1]];
+			// }
+			// catch(e)
+			// {
+			// 	trace(e);
+				finalMap = [];
+			// }
 			finalMap;
 		}
 	#end
@@ -55,6 +55,7 @@ class ClassTools
 	;
 	public static function init()
 	{
+		return;
 		if(Context.defined("display")) return;
 
 		function onGenerate(t:Type)
@@ -105,13 +106,13 @@ class ClassTools
 		{
 			for (t in types) onGenerate(t);
 
-			self.meta.remove('typedefDefines');
-			self.meta.remove('allClassesAvailable');
+			// self.meta.remove('typedefDefines');
+			// self.meta.remove('allClassesAvailable');
 
-			// for (name => orig in typedefDefines) trace(name + " => " + orig);
+			// // for (name => orig in typedefDefines) trace(name + " => " + orig);
 
-			self.meta.add('typedefDefines', [for (name => orig in typedefDefines) macro [$v{name}, $v{orig}]], Context.currentPos());
-			self.meta.add('allClassesAvailable', [for (i in allClassesAvailable) macro $v{i}], Context.currentPos());
+			// self.meta.add('typedefDefines', [for (name => orig in typedefDefines) macro [$v{name}, $v{orig}]], Context.currentPos());
+			// self.meta.add('allClassesAvailable', [for (i in allClassesAvailable) macro $v{i}], Context.currentPos());
 		});
 	}
 	#end
