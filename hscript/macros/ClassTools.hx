@@ -1,30 +1,37 @@
 package hscript.macros;
 
-import haxe.macro.Type.BaseType;
+import haxe.io.Bytes;
 #if macro
+import haxe.Serializer;
+import haxe.crypto.Base64;
+import haxe.macro.Type.BaseType;
+import haxe.macro.Compiler;
 import haxe.macro.Context;
 import haxe.macro.TypeTools;
 import haxe.macro.Type;
 #else
-// import haxe.rtti.Meta;
+import haxe.Resource;
+import haxe.Unserializer;
+import haxe.rtti.Meta;
 #end
 
 class ClassTools
 {
+	inline static final classPath = 'hscript.macros.ClassTools';
 	public static final allClassesAvailable:Array<String> = #if macro
 		[];
 	#else
 		{
 			var finalArr:Array<String> = null;
-			// try
-			// {
-			// 	finalArr = cast Meta.getType(ClassTools).allClassesAvailable;
-			// }
-			// catch(e)
-			// {
-			// 	trace(e);
+			try
+			{
+				finalArr = Unserializer.run(Resource.getBytes('$classPath::allClassesAvailable').toString());
+			}
+			catch(e)
+			{
+				trace(e);
 				finalArr = [];
-			// }
+			}
 			finalArr;
 		}
 	#end
@@ -33,15 +40,15 @@ class ClassTools
 	#else
 		{
 			var finalMap:Map<String,String> = null;
-			// try
-			// {
-			// 	finalMap = [for (i in cast (Meta.getType(ClassTools).typedefDefines, Array<Dynamic>)) i[0] => i[1]];
-			// }
-			// catch(e)
-			// {
-			// 	trace(e);
+			try
+			{
+				finalMap = Unserializer.run(Resource.getBytes('$classPath::typedefDefines').toString());
+			}
+			catch(e)
+			{
+				trace(e);
 				finalMap = [];
-			// }
+			}
 			finalMap;
 		}
 	#end
@@ -55,7 +62,6 @@ class ClassTools
 	;
 	public static function init()
 	{
-		return;
 		if(Context.defined("display")) return;
 
 		function onGenerate(t:Type)
@@ -101,18 +107,18 @@ class ClassTools
 				default:
 			}
 		}
-		final self = TypeTools.getClass(Context.getType('hscript.macros.ClassTools'));
+
 		Context.onGenerate(function(types:Array<Type>)
 		{
 			for (t in types) onGenerate(t);
 
-			// self.meta.remove('typedefDefines');
-			// self.meta.remove('allClassesAvailable');
-
-			// // for (name => orig in typedefDefines) trace(name + " => " + orig);
-
-			// self.meta.add('typedefDefines', [for (name => orig in typedefDefines) macro [$v{name}, $v{orig}]], Context.currentPos());
-			// self.meta.add('allClassesAvailable', [for (i in allClassesAvailable) macro $v{i}], Context.currentPos());
+			function runSerialize(v:Dynamic) {
+				var s = new Serializer();
+				s.serialize(v);
+				return s.toString();
+			}
+			Context.addResource('$classPath::typedefDefines', Bytes.ofString(runSerialize(typedefDefines)));
+			Context.addResource('$classPath::allClassesAvailable', Bytes.ofString(runSerialize(allClassesAvailable)));
 		});
 	}
 	#end
